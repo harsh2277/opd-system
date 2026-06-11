@@ -402,7 +402,7 @@ export function DoctorPatientDetails() {
               <p className="text-[10px] text-[var(--neutral-400)] truncate">{currentDoctor?.specialty ?? ''}</p>
             </div>
             <button
-              onClick={() => { localStorage.removeItem('current-doctor'); navigate('/'); }}
+              onClick={() => { localStorage.removeItem('current-doctor'); localStorage.removeItem('opd-doctor-session-start'); navigate('/'); }}
               className="text-[var(--neutral-400)] hover:text-[var(--neutral-600)] transition-colors"
               title="Logout"
             >

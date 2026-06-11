@@ -121,7 +121,7 @@ export function DoctorSelection() {
 
       {/* Footer Action Bar */}
       {selectedDoctor && (
-        <div className="fixed bottom-0 left-60 right-0 bg-white border-t border-[var(--neutral-200)] p-4">
+        <div className="fixed bottom-0 left-56 right-0 bg-white border-t border-[var(--neutral-200)] p-4">
           <div className="max-w-6xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-4">
               <span className="text-sm text-[var(--neutral-600)]">

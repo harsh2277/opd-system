@@ -57,7 +57,7 @@ export function Login() {
     }
     // 3. Pharmacy
     else if (trimmedEmail === 'pharmacy@gmail.com' && password === 'pharmacy123') {
-      const mockUser = { id: 'PH003', name: 'Pharmacy Staff', email: 'pharmacy@gmail.com', role: 'Pharmacy Staff' };
+      const mockUser = { id: 'PH003', name: 'Pharmacy Staff', email: 'pharmacy@gmail.com', role: 'Pharmacy Staff', loginAt: new Date().toISOString() };
       clearDemoUsers();
       localStorage.setItem('current-pharmacy-user', JSON.stringify(mockUser));
       toast.success('Welcome to Pharmacy Portal!');
@@ -65,7 +65,7 @@ export function Login() {
     }
     // 4. Lab
     else if (trimmedEmail === 'lab@gmail.com' && password === 'lab123') {
-      const mockUser = { id: 'LB001', name: 'Lab Staff', email: 'lab@gmail.com', role: 'Chief Pathologist' };
+      const mockUser = { id: 'LB001', name: 'Lab Staff', email: 'lab@gmail.com', role: 'Chief Pathologist', loginAt: new Date().toISOString() };
       clearDemoUsers();
       localStorage.setItem('current-lab-user', JSON.stringify(mockUser));
       toast.success('Welcome to Lab Portal!');

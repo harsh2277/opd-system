@@ -10,16 +10,7 @@ import {
   ArrowUpRight,
   ArrowRight,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-
-const recentActivity = [
-  { id: 1, text: 'New patient registered', name: 'Rajesh Kumar', time: '5 min ago', type: 'new' },
-  { id: 2, text: 'Consultation completed', name: 'Priya Patel', time: '12 min ago', type: 'done' },
-  { id: 3, text: 'Patient marked urgent', name: 'Amit Singh', time: '18 min ago', type: 'urgent' },
-  { id: 4, text: 'Doctor checked in', name: 'Dr. Sharma', time: '25 min ago', type: 'info' },
-  { id: 5, text: 'Token issued', name: 'Sneha Reddy', time: '32 min ago', type: 'new' },
-  { id: 6, text: 'Appointment scheduled', name: 'Arjun Mehta', time: '41 min ago', type: 'info' },
-];
+import { useApp, Token } from '../context/AppContext';
 
 const activityDotColor: Record<string, string> = {
   new: 'bg-[var(--brand-500)]',
@@ -27,6 +18,54 @@ const activityDotColor: Record<string, string> = {
   urgent: 'bg-[var(--error-500)]',
   info: 'bg-[var(--neutral-400)]',
 };
+
+function formatRelativeTime(isoString: string): string {
+  const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 60000);
+  if (diff < 1) return 'just now';
+  if (diff < 60) return `${diff} min ago`;
+  const h = Math.floor(diff / 60);
+  return `${h}h ago`;
+}
+
+function deriveActivity(tokens: Token[]) {
+  const events: { id: string; text: string; name: string; time: string; type: string; ts: number }[] = [];
+
+  tokens.forEach((t) => {
+    // Check-in event
+    events.push({
+      id: `checkin-${t.id}`,
+      text: t.isNewPatient ? 'New patient registered' : 'Returning patient checked in',
+      name: t.patient.name,
+      time: formatRelativeTime(t.issuedAt),
+      type: 'new',
+      ts: new Date(t.issuedAt).getTime(),
+    });
+    // Urgent flag
+    if (t.urgent) {
+      events.push({
+        id: `urgent-${t.id}`,
+        text: 'Patient marked urgent',
+        name: t.patient.name,
+        time: formatRelativeTime(t.issuedAt),
+        type: 'urgent',
+        ts: new Date(t.issuedAt).getTime() + 1,
+      });
+    }
+    // Consultation completed
+    if (t.status === 'done') {
+      events.push({
+        id: `done-${t.id}`,
+        text: 'Consultation completed',
+        name: t.patient.name,
+        time: formatRelativeTime(t.issuedAt),
+        type: 'done',
+        ts: new Date(t.issuedAt).getTime() + 2,
+      });
+    }
+  });
+
+  return events.sort((a, b) => b.ts - a.ts).slice(0, 6);
+}
 
 export function ReceptionDashboard() {
   const navigate = useNavigate();
@@ -37,13 +76,20 @@ export function ReceptionDashboard() {
   const completed = tokens.filter((t) => t.status === 'done').length;
   const onDuty = doctors.filter((d) => d.status === 'on-duty').length;
 
+  const todayLabel = new Date().toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   const stats = [
     {
       label: 'Total Patients Today',
       value: tokens.length,
-      sub: '+12 from yesterday',
+      sub: tokens.length === 0 ? 'No check-ins yet' : `${tokens.length} token${tokens.length !== 1 ? 's' : ''} issued`,
       icon: Users,
-      trend: true,
+      trend: tokens.length > 0,
     },
     {
       label: 'Currently Waiting',
@@ -62,9 +108,9 @@ export function ReceptionDashboard() {
     {
       label: 'Completed Today',
       value: completed,
-      sub: '+8 from yesterday',
+      sub: completed === 0 ? 'None completed yet' : `${completed} of ${tokens.length} done`,
       icon: CheckCircle2,
-      trend: true,
+      trend: completed > 0,
     },
   ];
 
@@ -96,7 +142,7 @@ export function ReceptionDashboard() {
         <div>
           <h1 className="text-xl font-bold text-[var(--neutral-900)]">Dashboard</h1>
           <p className="text-xs text-[var(--neutral-500)] mt-0.5">
-            Monday, 8 June 2026&nbsp;&nbsp;·&nbsp;&nbsp;OPD Session Active
+            {todayLabel}&nbsp;&nbsp;·&nbsp;&nbsp;OPD Session Active
           </p>
         </div>
         <button
@@ -169,23 +215,32 @@ export function ReceptionDashboard() {
         <div className="bg-white border border-[var(--neutral-200)] rounded-lg">
           <div className="px-5 py-4 border-b border-[var(--neutral-100)] flex items-center justify-between">
             <p className="text-sm font-medium text-[var(--neutral-900)]">Recent Activity</p>
-            <button className="text-xs text-[var(--brand-500)] hover:underline">View all</button>
+            <button
+              onClick={() => navigate('/queue')}
+              className="text-xs text-[var(--brand-500)] hover:underline"
+            >
+              View queue
+            </button>
           </div>
           <div className="divide-y divide-[var(--neutral-100)]">
-            {recentActivity.map((a) => (
-              <div key={a.id} className="flex items-start gap-3 px-5 py-3">
-                <div className="mt-1.5 flex-shrink-0">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full ${activityDotColor[a.type]}`}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-[var(--neutral-800)] font-medium">{a.text}</p>
-                  <p className="text-[10px] text-[var(--neutral-500)]">{a.name}</p>
-                </div>
-                <span className="text-[10px] text-[var(--neutral-400)] whitespace-nowrap">{a.time}</span>
+            {deriveActivity(tokens).length === 0 ? (
+              <div className="px-5 py-8 text-center text-xs text-[var(--neutral-400)]">
+                No activity yet today
               </div>
-            ))}
+            ) : (
+              deriveActivity(tokens).map((a) => (
+                <div key={a.id} className="flex items-start gap-3 px-5 py-3">
+                  <div className="mt-1.5 flex-shrink-0">
+                    <div className={`w-1.5 h-1.5 rounded-full ${activityDotColor[a.type]}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-[var(--neutral-800)] font-medium">{a.text}</p>
+                    <p className="text-[10px] text-[var(--neutral-500)]">{a.name}</p>
+                  </div>
+                  <span className="text-[10px] text-[var(--neutral-400)] whitespace-nowrap">{a.time}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

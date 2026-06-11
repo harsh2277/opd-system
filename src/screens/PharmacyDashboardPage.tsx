@@ -3,18 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { Pill, LogOut, User, RefreshCw, ChevronRight } from 'lucide-react';
 import { PharmacyDashboard } from './PharmacyDashboard';
 import { toast } from 'sonner';
+import { useApp } from '../context/AppContext';
 
 interface PharmacyUser {
   id: string;
   name: string;
   email: string;
   role: string;
+  loginAt?: string;
 }
 
 export function PharmacyDashboardPage() {
   const navigate = useNavigate();
+  const { tokens } = useApp();
   const [pharmacyUser, setPharmacyUser] = useState<PharmacyUser | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Auth guard
   useEffect(() => {
@@ -73,7 +77,10 @@ export function PharmacyDashboardPage() {
         <div className="flex items-center gap-2">
           {/* Refresh hint */}
           <button
-            onClick={() => { toast.info('Dashboard data refreshed'); }}
+            onClick={() => {
+              setRefreshKey((k) => k + 1);
+              toast.success(`Refreshed — ${tokens.filter(t => t.prescription?.length && t.prescriptionStatus === 'pending').length} prescriptions pending`);
+            }}
             title="Refresh data"
             className="p-2 rounded-lg text-[var(--neutral-500)] hover:text-[var(--neutral-900)] hover:bg-[var(--neutral-100)] transition-all"
           >
@@ -111,12 +118,14 @@ export function PharmacyDashboardPage() {
             Active session: {pharmacyUser.name}
           </span>
           <span className="text-[var(--neutral-500)] ml-auto">
-            Session started · {currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            Session started · {pharmacyUser?.loginAt
+              ? new Date(pharmacyUser.loginAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+              : currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
 
         {/* The actual pharmacy dashboard content */}
-        <PharmacyDashboard />
+        <PharmacyDashboard key={refreshKey} />
       </main>
 
       {/* Footer */}

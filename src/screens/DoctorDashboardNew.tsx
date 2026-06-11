@@ -48,7 +48,13 @@ export function DoctorDashboardNew() {
   }, [navigate]);
 
   useEffect(() => {
-    const start = Date.now();
+    // Persist session start so the timer survives page navigation
+    const KEY = 'opd-doctor-session-start';
+    if (!localStorage.getItem(KEY)) {
+      localStorage.setItem(KEY, String(Date.now()));
+    }
+    const start = parseInt(localStorage.getItem(KEY)!, 10);
+
     const id = setInterval(() => {
       const diff = Date.now() - start;
       const h = Math.floor(diff / 3600000);
@@ -76,6 +82,7 @@ export function DoctorDashboardNew() {
 
   const handleLogout = () => {
     localStorage.removeItem('current-doctor');
+    localStorage.removeItem('opd-doctor-session-start');
     navigate('/');
   };
 
