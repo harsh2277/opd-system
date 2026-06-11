@@ -4,14 +4,17 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { User, ArrowLeft } from 'lucide-react';
+import { User, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useApp } from '../context/AppContext';
+import { mockPatients } from '../data/mockPatients';
 
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const conditions = ['Diabetes', 'Hypertension', 'Asthma', 'Heart Disease', 'Thyroid'];
 
 export function NewPatientForm() {
   const navigate = useNavigate();
+  const { tokens } = useApp();
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -48,6 +51,15 @@ export function NewPatientForm() {
       return;
     }
 
+    // Duplicate detection — check live tokens and mock patients by mobile
+    const liveMatch = tokens.find((t) => t.patient.mobile === formData.mobile);
+    const mockMatch = mockPatients.find((p) => p.mobile === formData.mobile);
+    if (liveMatch || mockMatch) {
+      const existing = liveMatch?.patient || mockMatch!;
+      toast.warning(`Mobile already registered to ${existing.name}. Use "Returning Patient" instead.`);
+      return;
+    }
+
     toast.success('Patient registered successfully!');
     navigate('/doctor-selection', { state: { patient: formData, isNew: true } });
   };
@@ -56,10 +68,17 @@ export function NewPatientForm() {
     <div className="max-w-6xl mx-auto">
       {/* Progress Bar */}
       <div className="text-center mb-6">
-        <div className="flex justify-center gap-2 mb-3">
-          <div className="w-8 h-2 rounded-full bg-[var(--brand-500)]"></div>
-          <div className="w-8 h-2 rounded-full bg-[var(--brand-500)]"></div>
-          <div className="w-8 h-2 rounded-full bg-[var(--neutral-200)]"></div>
+        <div className="flex justify-center items-end gap-6 mb-3">
+          {[
+            { label: 'Patient Type', active: true },
+            { label: 'Details', active: true },
+            { label: 'Doctor', active: false },
+          ].map((step) => (
+            <div key={step.label} className="flex flex-col items-center gap-1.5">
+              <div className={`w-16 h-2 rounded-full ${step.active ? 'bg-[var(--brand-500)]' : 'bg-[var(--neutral-200)]'}`} />
+              <span className={`text-[10px] font-medium ${step.active ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+            </div>
+          ))}
         </div>
         <p className="text-lg text-[var(--neutral-700)]">
           <span className="font-semibold">Step 2 of 3</span> — Patient Details
@@ -127,6 +146,22 @@ export function NewPatientForm() {
                     required
                   />
                 </div>
+                {formData.mobile.length === 10 && (() => {
+                  const liveMatch = tokens.find((t) => t.patient.mobile === formData.mobile);
+                  const mockMatch = mockPatients.find((p) => p.mobile === formData.mobile);
+                  const existing = liveMatch?.patient || mockMatch;
+                  return existing ? (
+                    <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-[var(--warning-50)] border border-[var(--warning-200)]">
+                      <AlertTriangle size={14} className="text-[var(--warning-600)] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-medium text-[var(--warning-700)]">Mobile already registered</p>
+                        <p className="text-[10px] text-[var(--warning-600)]">
+                          {existing.name} · {existing.age} yrs · {existing.gender} — use Returning Patient instead
+                        </p>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               <div>

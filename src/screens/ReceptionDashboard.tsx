@@ -257,6 +257,8 @@ export function ReceptionDashboard() {
                     className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                       doctor.status === 'on-duty'
                         ? 'bg-[var(--success-500)]'
+                        : doctor.status === 'break' || doctor.status === 'lunch'
+                        ? 'bg-[var(--warning-500)]'
                         : 'bg-[var(--neutral-300)]'
                     }`}
                   />
@@ -271,14 +273,17 @@ export function ReceptionDashboard() {
                       {doctor.queue} waiting
                     </span>
                   )}
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded border ${
-                      doctor.status === 'on-duty'
-                        ? 'border-[var(--success-200)] text-[var(--success-700)] bg-[var(--success-50)]'
-                        : 'border-[var(--neutral-200)] text-[var(--neutral-500)] bg-[var(--neutral-50)]'
-                    }`}
-                  >
-                    {doctor.status === 'on-duty' ? 'On Duty' : 'Off Duty'}
+                  <span className={`text-xs px-2 py-0.5 rounded border ${
+                    doctor.status === 'on-duty'
+                      ? 'border-[var(--success-200)] text-[var(--success-700)] bg-[var(--success-50)]'
+                      : doctor.status === 'break' || doctor.status === 'lunch'
+                      ? 'border-[var(--warning-200)] text-[var(--warning-700)] bg-[var(--warning-50)]'
+                      : 'border-[var(--neutral-200)] text-[var(--neutral-500)] bg-[var(--neutral-50)]'
+                  }`}>
+                    {doctor.status === 'on-duty' ? 'On Duty'
+                      : doctor.status === 'break' ? 'On Break'
+                      : doctor.status === 'lunch' ? 'Lunch'
+                      : 'Off Duty'}
                   </span>
                 </div>
               </div>

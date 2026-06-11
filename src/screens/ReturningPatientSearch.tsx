@@ -70,10 +70,17 @@ export function ReturningPatientSearch() {
     <div className="max-w-3xl mx-auto">
       {/* Progress Bar */}
       <div className="text-center mb-6">
-        <div className="flex justify-center gap-2 mb-3">
-          <div className="w-8 h-2 rounded-full bg-[var(--brand-500)]"></div>
-          <div className="w-8 h-2 rounded-full bg-[var(--brand-500)]"></div>
-          <div className="w-8 h-2 rounded-full bg-[var(--neutral-200)]"></div>
+        <div className="flex justify-center items-end gap-6 mb-3">
+          {[
+            { label: 'Patient Type', active: true },
+            { label: 'Details', active: true },
+            { label: 'Doctor', active: false },
+          ].map((step) => (
+            <div key={step.label} className="flex flex-col items-center gap-1.5">
+              <div className={`w-16 h-2 rounded-full ${step.active ? 'bg-[var(--brand-500)]' : 'bg-[var(--neutral-200)]'}`} />
+              <span className={`text-[10px] font-medium ${step.active ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+            </div>
+          ))}
         </div>
         <p className="text-lg text-[var(--neutral-700)]">
           <span className="font-semibold">Step 2 of 3</span> — Find Patient

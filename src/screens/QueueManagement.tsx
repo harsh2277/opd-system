@@ -1,6 +1,17 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Clock, UserPlus, Bell, X, CheckCircle, AlertCircle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '../components/ui/alert-dialog';
+import { Clock, UserPlus, Bell, X, CheckCircle, AlertCircle, Stethoscope } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
@@ -51,10 +62,8 @@ export function QueueManagement() {
   };
 
   const handleEndSession = () => {
-    if (confirm('Are you sure you want to end this session?')) {
-      endSession();
-      toast.success('Session ended');
-    }
+    endSession();
+    toast.success('Session ended');
   };
 
   const handleMoveToken = (tokenNumber: string, newStatus: 'waiting' | 'in-consultation' | 'done' | 'skipped') => {
@@ -62,7 +71,9 @@ export function QueueManagement() {
     toast.success(`Moved token ${tokenNumber} to ${newStatus === 'in-consultation' ? 'Consultation' : newStatus}`);
   };
 
-  const waitingTokens = tokens.filter((t) => t.status === 'waiting');
+  const waitingTokens = tokens
+    .filter((t) => t.status === 'waiting')
+    .sort((a, b) => Number(b.urgent) - Number(a.urgent));
   const consultationTokens = tokens.filter((t) => t.status === 'in-consultation');
   const doneTokens = tokens.filter((t) => t.status === 'done');
   const skippedTokens = tokens.filter((t) => t.status === 'skipped');
@@ -162,13 +173,10 @@ export function QueueManagement() {
                   </>
                 )}
                 {status === 'in-consultation' && (
-                  <button
-                    onClick={() => handleComplete(item.token)}
-                    className="flex-1 py-1.5 px-3 bg-success-500 hover:bg-success-700 text-white rounded-md text-xs flex items-center justify-center gap-1.5 font-medium transition-all cursor-pointer shadow-sm active:scale-95"
-                  >
-                    <CheckCircle size={12} />
-                    Complete
-                  </button>
+                  <div className="flex-1 py-1.5 px-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-xs flex items-center justify-center gap-1.5 font-medium select-none">
+                    <Stethoscope size={12} />
+                    With Doctor
+                  </div>
                 )}
                 {status === 'skipped' && (
                   <button
@@ -215,14 +223,34 @@ export function QueueManagement() {
           <div className="font-mono text-sm font-semibold bg-[var(--brand-50)] text-[var(--brand-700)] px-3 py-1 rounded-md border border-[var(--brand-200)]">
             {currentToken ? `Serving Token: ${currentToken}` : 'No active consultations'}
           </div>
-          <Button
-            variant="line"
-            size="sm"
-            className="border-[var(--error-200)] text-[var(--error-600)] hover:bg-[var(--error-50)]"
-            onClick={handleEndSession}
-          >
-            End Session
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="line"
+                size="sm"
+                className="border-[var(--error-200)] text-[var(--error-600)] hover:bg-[var(--error-50)]"
+              >
+                End Session
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>End OPD Session?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will close the current session. Patients still in the queue will remain but no new tokens can be issued until a new session starts.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleEndSession}
+                  className="bg-[var(--error-500)] hover:bg-[var(--error-700)] text-white"
+                >
+                  Yes, End Session
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 

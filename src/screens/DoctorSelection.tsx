@@ -13,6 +13,7 @@ export function DoctorSelection() {
   const { patient, isNew } = location.state || {};
   const { doctors } = useApp();
   const [selectedDoctor, setSelectedDoctor] = useState<typeof doctors[0] | null>(null);
+  const [specialtyFilter, setSpecialtyFilter] = useState<string>('All');
 
   const handleIssueToken = () => {
     if (selectedDoctor) {
@@ -33,10 +34,17 @@ export function DoctorSelection() {
     <div className="max-w-6xl mx-auto">
       {/* Progress Bar */}
       <div className="text-center mb-6">
-        <div className="flex justify-center gap-2 mb-3">
-          <div className="w-8 h-2 rounded-full bg-[var(--brand-500)]"></div>
-          <div className="w-8 h-2 rounded-full bg-[var(--brand-500)]"></div>
-          <div className="w-8 h-2 rounded-full bg-[var(--brand-500)]"></div>
+        <div className="flex justify-center items-end gap-6 mb-3">
+          {[
+            { label: 'Patient Type', active: true },
+            { label: 'Details', active: true },
+            { label: 'Doctor', active: true },
+          ].map((step) => (
+            <div key={step.label} className="flex flex-col items-center gap-1.5">
+              <div className="w-16 h-2 rounded-full bg-[var(--brand-500)]" />
+              <span className="text-[10px] font-medium text-[var(--brand-600)]">{step.label}</span>
+            </div>
+          ))}
         </div>
         <p className="text-lg text-[var(--neutral-700)]">
           <span className="font-semibold">Step 3 of 3</span> — Select Doctor
@@ -61,14 +69,32 @@ export function DoctorSelection() {
         </div>
       </Card>
 
-      <div className="mb-6">
-        <h2 className="font-heading text-2xl font-bold text-[var(--neutral-900)] mb-2">Select a Doctor</h2>
-        <p className="text-[var(--neutral-600)]">Choose from available doctors on duty today</p>
+      <div className="flex items-end justify-between mb-6">
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-[var(--neutral-900)] mb-2">Select a Doctor</h2>
+          <p className="text-[var(--neutral-600)]">Choose from available doctors on duty today</p>
+        </div>
+        {/* Specialty filter chips */}
+        <div className="flex flex-wrap gap-2">
+          {['All', ...Array.from(new Set(doctors.map((d) => d.specialty)))].map((spec) => (
+            <button
+              key={spec}
+              onClick={() => setSpecialtyFilter(spec)}
+              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                specialtyFilter === spec
+                  ? 'bg-[var(--brand-500)] border-[var(--brand-500)] text-white'
+                  : 'bg-white border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-700)]'
+              }`}
+            >
+              {spec}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Doctor Grid */}
       <div className="grid grid-cols-3 gap-5 mb-6">
-        {doctors.map((doctor) => {
+        {doctors.filter((d) => specialtyFilter === 'All' || d.specialty === specialtyFilter).map((doctor) => {
           const isSelected = selectedDoctor?.id === doctor.id;
           const isOffDuty = doctor.status === 'off-duty';
 
@@ -98,7 +124,11 @@ export function DoctorSelection() {
               </div>
 
               <h3 className="font-heading text-lg font-bold text-[var(--neutral-900)] mb-1">{doctor.name}</h3>
-              <p className="text-sm text-[var(--neutral-600)] mb-4">{doctor.specialty}</p>
+              <p className="text-sm text-[var(--neutral-600)]">{doctor.specialty}</p>
+              {isOffDuty && (
+                <p className="text-xs text-[var(--neutral-400)] mt-0.5 mb-4">Not available today</p>
+              )}
+              {!isOffDuty && <div className="mb-4" />}
 
               <div className="pt-4 border-t border-[var(--neutral-200)] space-y-2">
                 <div className="flex items-center gap-2 text-sm">
