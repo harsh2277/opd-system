@@ -190,6 +190,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addToken = (token: Token) => {
     setTokens((prev) => [...prev, token]);
+    const label = token.isNewPatient ? 'New patient' : 'Returning patient';
+    setNotifications((prev) => [
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        text: `${label} ${token.patient.name} checked in — ${token.token} for ${token.doctor.name}`,
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        type: 'info' as const,
+        unread: true,
+      },
+      ...prev,
+    ]);
   };
 
   const addDoctor = (doctor: Doctor) => {

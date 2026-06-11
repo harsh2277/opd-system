@@ -16,7 +16,7 @@ import { TokenReceipt } from './screens/TokenReceipt';
 import { QueueManagement } from './screens/QueueManagement';
 import { TVDisplay } from './screens/TVDisplay';
 import { TVDisplayDebug } from './screens/TVDisplayDebug';
-import { DoctorDashboardNew } from './screens/DoctorDashboardNew';
+import { DoctorDashboard } from './screens/DoctorDashboard';
 import { DoctorPatientDetails } from './screens/DoctorPatientDetails';
 import { PharmacyDashboardPage } from './screens/PharmacyDashboardPage';
 import { LabDashboardPage } from './screens/LabDashboardPage';
@@ -26,6 +26,7 @@ import { AdminReports } from './screens/admin/AdminReports';
 import { AdminSettings } from './screens/admin/AdminSettings';
 import { AdminBilling } from './screens/admin/AdminBilling';
 import { AdminAddUser } from './screens/admin/AdminAddUser';
+import { BillingManagement } from './screens/BillingManagement';
 import { UiShowcase } from './screens/UiShowcase';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -119,6 +120,16 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/billing"
+            element={
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <BillingManagement />
+                </DesktopLayout>
+              </ProtectedRoute>
+            }
+          />
           {/* TV Display - Full Screen, No Layout */}
           <Route path="/display" element={<TVDisplay />} />
           <Route path="/display-debug" element={<TVDisplayDebug />} />
@@ -131,7 +142,7 @@ export default function App() {
             path="/doctor-dashboard"
             element={
               <ProtectedRoute role="doctor">
-                <DoctorDashboardNew />
+                <DoctorDashboard />
               </ProtectedRoute>
             }
           />

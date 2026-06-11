@@ -11,6 +11,7 @@ import {
   Stethoscope,
   LogOut,
   ChevronRight,
+  Receipt,
 } from 'lucide-react';
 
 interface DesktopLayoutProps {
@@ -30,6 +31,7 @@ const navGroups = [
       { icon: UserPlus, label: 'Check-in', path: '/patient-type' },
       { icon: ListChecks, label: 'Queue', path: '/queue' },
       { icon: Users, label: 'Patient Records', path: '/patients' },
+      { icon: Receipt, label: 'Billing', path: '/billing' },
     ],
   },
 ];

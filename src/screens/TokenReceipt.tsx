@@ -136,13 +136,20 @@ export function TokenReceipt() {
                     ))}
                   </div>
                 </div>
-                <div className="flex pt-2">
-                  <Button 
+                <div className="flex flex-col gap-2 pt-2">
+                  <Button
                     onClick={() => handleIssueToken(true)}
                     className="w-full text-xs h-10 font-bold"
                   >
                     Pay ₹{fee} & Issue Token
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => handleIssueToken(false)}
+                    className="w-full text-xs h-9 font-medium border border-[var(--neutral-200)] rounded-md text-[var(--neutral-600)] hover:bg-[var(--neutral-50)] transition-colors"
+                  >
+                    Issue Token — Pay Later
+                  </button>
                 </div>
               </div>
 

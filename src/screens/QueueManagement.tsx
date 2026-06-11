@@ -11,14 +11,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '../components/ui/alert-dialog';
-import { Clock, UserPlus, Bell, X, CheckCircle, AlertCircle, Stethoscope } from 'lucide-react';
+import { Clock, UserPlus, Bell, X, CheckCircle, AlertCircle, Stethoscope, Monitor } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 
 const statusLeftBorders = {
   'waiting': 'border-l-4 border-l-[var(--warning-400)]',
-  'in-consultation': 'border-l-4 border-l-blue-500',
+  'in-consultation': 'border-l-4 border-l-[var(--brand-500)]',
   'done': 'border-l-4 border-l-[var(--success-500)]',
   'skipped': 'border-l-4 border-l-[var(--neutral-400)]',
 };
@@ -259,14 +259,24 @@ export function QueueManagement() {
           <h2 className="font-semibold text-xl text-[var(--neutral-900)]">Today's Queue</h2>
           <p className="text-xs text-[var(--neutral-500)] mt-0.5">Manage and drag-and-drop token states in real-time</p>
         </div>
-        <Button
-          onClick={() => navigate('/patient-type')}
-          variant="primary"
-          className="flex items-center gap-1.5 text-xs py-2 h-9"
-        >
-          <UserPlus size={14} />
-          New Check-in
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.open('/display', '_blank', 'width=1280,height=720')}
+            className="flex items-center gap-1.5 px-3 py-2 h-9 text-xs font-medium border border-[var(--neutral-200)] rounded-md text-[var(--neutral-600)] hover:bg-[var(--neutral-50)] transition-colors"
+            title="Open TV display in new window"
+          >
+            <Monitor size={14} />
+            TV Display
+          </button>
+          <Button
+            onClick={() => navigate('/patient-type')}
+            variant="primary"
+            className="flex items-center gap-1.5 text-xs py-2 h-9"
+          >
+            <UserPlus size={14} />
+            New Check-in
+          </Button>
+        </div>
       </div>
 
       {/* Kanban Columns */}
@@ -282,8 +292,8 @@ export function QueueManagement() {
           title="IN CONSULTATION"
           items={consultationTokens}
           status="in-consultation"
-          borderColor="border-blue-500"
-          textColor="text-blue-700"
+          borderColor="border-[var(--brand-500)]"
+          textColor="text-[var(--brand-700)]"
         />
         <Column
           title="DONE"
