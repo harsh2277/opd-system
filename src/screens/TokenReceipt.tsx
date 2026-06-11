@@ -4,6 +4,7 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Check, Printer, Phone, ArrowRight, Clock, CreditCard, AlertCircle } from 'lucide-react';
+import { generateTokenNumber } from '../utils/tokenCounter';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 
@@ -19,8 +20,8 @@ export function TokenReceipt() {
 
   const fee = isNew ? 500 : 300;
 
-  // Generate unique token if not provided - MUST be before useEffect
-  const displayToken = token || `OPD-${Date.now().toString().slice(-3)}`;
+  // Use token from navigation state; only generate a new one if arriving without state
+  const displayToken = token || generateTokenNumber();
 
   const handleIssueToken = (payNow: boolean) => {
     if (patient && doctor && !hasAddedToken) {

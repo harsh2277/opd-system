@@ -6,6 +6,15 @@ import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 
+const DOCTOR_CREDENTIALS: Record<string, { id: string; password: string; label: string }> = {
+  'sharma@gmail.com':  { id: 'D001', password: 'sharma123',  label: 'Dr. Sharma'  },
+  'patel@gmail.com':   { id: 'D002', password: 'patel123',   label: 'Dr. Patel'   },
+  'kumar@gmail.com':   { id: 'D003', password: 'kumar123',   label: 'Dr. Kumar'   },
+  'singh@gmail.com':   { id: 'D004', password: 'singh123',   label: 'Dr. Singh'   },
+  'mehta@gmail.com':   { id: 'D005', password: 'mehta123',   label: 'Dr. Mehta'   },
+  'rao@gmail.com':     { id: 'D006', password: 'rao123',     label: 'Dr. Rao'     },
+};
+
 export function Login() {
   const navigate = useNavigate();
   const { startSession, doctors } = useApp();
@@ -37,20 +46,13 @@ export function Login() {
       toast.success('Welcome back, Receptionist!');
       navigate('/dashboard');
     }
-    // 2. Doctor
-    else if (trimmedEmail === 'doctor@gmail.com' && password === 'doctor123') {
-      // Log in as the first available on-duty doctor, default to D001
-      const defaultDoctor = doctors.find((d) => d.status === 'on-duty') || doctors[0] || {
-        id: 'D001',
-        name: 'Dr. Sharma',
-        specialty: 'General Physician',
-        queue: 0,
-        avgWait: 15,
-        status: 'on-duty'
-      };
+    // 2. Doctors — individual credentials per doctor
+    else if (DOCTOR_CREDENTIALS[trimmedEmail] && password === DOCTOR_CREDENTIALS[trimmedEmail].password) {
+      const doctorId = DOCTOR_CREDENTIALS[trimmedEmail].id;
+      const matchedDoctor = doctors.find((d) => d.id === doctorId) || doctors[0];
       clearDemoUsers();
-      localStorage.setItem('current-doctor', JSON.stringify(defaultDoctor));
-      toast.success(`Welcome, Dr. ${defaultDoctor.name}`);
+      localStorage.setItem('current-doctor', JSON.stringify(matchedDoctor));
+      toast.success(`Welcome, ${matchedDoctor.name}`);
       navigate('/doctor-dashboard');
     }
     // 3. Pharmacy
@@ -138,67 +140,62 @@ export function Login() {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant="line"
-              size="sm"
-              onClick={() => {
-                setEmail('harsh@gmail.com');
-                setPassword('harsh123');
-              }}
-              className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
-            >
-              Receptionist
-            </Button>
-            <Button
-              type="button"
-              variant="line"
-              size="sm"
-              onClick={() => {
-                setEmail('doctor@gmail.com');
-                setPassword('doctor123');
-              }}
-              className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
-            >
-              Doctor
-            </Button>
-            <Button
-              type="button"
-              variant="line"
-              size="sm"
-              onClick={() => {
-                setEmail('pharmacy@gmail.com');
-                setPassword('pharmacy123');
-              }}
-              className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
-            >
-              Pharmacy
-            </Button>
-            <Button
-              type="button"
-              variant="line"
-              size="sm"
-              onClick={() => {
-                setEmail('lab@gmail.com');
-                setPassword('lab123');
-              }}
-              className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
-            >
-              Lab
-            </Button>
-            <Button
-              type="button"
-              variant="line"
-              size="sm"
-              onClick={() => {
-                setEmail('admin@gmail.com');
-                setPassword('admin123');
-              }}
-              className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)] col-span-2"
-            >
-              Admin
-            </Button>
+          <div className="space-y-2">
+            {/* Staff portals */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="line"
+                size="sm"
+                onClick={() => { setEmail('harsh@gmail.com'); setPassword('harsh123'); }}
+                className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
+              >
+                Receptionist
+              </Button>
+              <Button
+                type="button"
+                variant="line"
+                size="sm"
+                onClick={() => { setEmail('pharmacy@gmail.com'); setPassword('pharmacy123'); }}
+                className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
+              >
+                Pharmacy
+              </Button>
+              <Button
+                type="button"
+                variant="line"
+                size="sm"
+                onClick={() => { setEmail('lab@gmail.com'); setPassword('lab123'); }}
+                className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
+              >
+                Lab
+              </Button>
+              <Button
+                type="button"
+                variant="line"
+                size="sm"
+                onClick={() => { setEmail('admin@gmail.com'); setPassword('admin123'); }}
+                className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
+              >
+                Admin
+              </Button>
+            </div>
+            {/* Individual doctor logins */}
+            <p className="text-[10px] text-[var(--neutral-400)] text-center pt-1">Doctors</p>
+            <div className="grid grid-cols-3 gap-2">
+              {Object.entries(DOCTOR_CREDENTIALS).map(([email, { password, label }]) => (
+                <Button
+                  key={email}
+                  type="button"
+                  variant="line"
+                  size="sm"
+                  onClick={() => { setEmail(email); setPassword(password); }}
+                  className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
 
           <p className="text-[10px] text-center text-[var(--neutral-400)] mt-4">

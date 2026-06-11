@@ -27,6 +27,7 @@ import { AdminSettings } from './screens/admin/AdminSettings';
 import { AdminBilling } from './screens/admin/AdminBilling';
 import { AdminAddUser } from './screens/admin/AdminAddUser';
 import { UiShowcase } from './screens/UiShowcase';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 export default function App() {
   return (
@@ -41,65 +42,81 @@ export default function App() {
           <Route
             path="/dashboard"
             element={
-              <DesktopLayout>
-                <ReceptionDashboard />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <ReceptionDashboard />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/patients"
             element={
-              <DesktopLayout>
-                <PatientManagement />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <PatientManagement />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/patient-type"
             element={
-              <DesktopLayout>
-                <PatientTypeSelector />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <PatientTypeSelector />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/new-patient"
             element={
-              <DesktopLayout>
-                <NewPatientForm />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <NewPatientForm />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/returning-patient"
             element={
-              <DesktopLayout>
-                <ReturningPatientSearch />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <ReturningPatientSearch />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/doctor-selection"
             element={
-              <DesktopLayout>
-                <DoctorSelection />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <DoctorSelection />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/token-receipt"
             element={
-              <DesktopLayout>
-                <TokenReceipt />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <TokenReceipt />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/queue"
             element={
-              <DesktopLayout>
-                <QueueManagement />
-              </DesktopLayout>
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <QueueManagement />
+                </DesktopLayout>
+              </ProtectedRoute>
             }
           />
           {/* TV Display - Full Screen, No Layout */}
@@ -110,63 +127,103 @@ export default function App() {
           <Route path="/ui" element={<UiShowcase />} />
 
           {/* Doctor Routes - Full Screen, No Desktop Layout */}
-          <Route path="/doctor-dashboard" element={<DoctorDashboardNew />} />
-          <Route path="/doctor-patient/:tokenId" element={<DoctorPatientDetails />} />
+          <Route
+            path="/doctor-dashboard"
+            element={
+              <ProtectedRoute role="doctor">
+                <DoctorDashboardNew />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor-patient/:tokenId"
+            element={
+              <ProtectedRoute role="doctor">
+                <DoctorPatientDetails />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Pharmacy Routes - Full Screen, No Desktop Layout */}
-          <Route path="/pharmacy-dashboard" element={<PharmacyDashboardPage />} />
+          <Route
+            path="/pharmacy-dashboard"
+            element={
+              <ProtectedRoute role="pharmacy">
+                <PharmacyDashboardPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Lab Routes - Full Screen, No Desktop Layout */}
-          <Route path="/lab-dashboard" element={<LabDashboardPage />} />
+          <Route
+            path="/lab-dashboard"
+            element={
+              <ProtectedRoute role="lab">
+                <LabDashboardPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
           <Route
             path="/admin/dashboard"
             element={
-              <AdminLayout>
-                <AdminDashboard />
-              </AdminLayout>
+              <ProtectedRoute role="admin">
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/admin/users/add"
             element={
-              <AdminLayout>
-                <AdminAddUser />
-              </AdminLayout>
+              <ProtectedRoute role="admin">
+                <AdminLayout>
+                  <AdminAddUser />
+                </AdminLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/admin/users"
             element={
-              <AdminLayout>
-                <AdminUsers />
-              </AdminLayout>
+              <ProtectedRoute role="admin">
+                <AdminLayout>
+                  <AdminUsers />
+                </AdminLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/admin/reports"
             element={
-              <AdminLayout>
-                <AdminReports />
-              </AdminLayout>
+              <ProtectedRoute role="admin">
+                <AdminLayout>
+                  <AdminReports />
+                </AdminLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/admin/settings"
             element={
-              <AdminLayout>
-                <AdminSettings />
-              </AdminLayout>
+              <ProtectedRoute role="admin">
+                <AdminLayout>
+                  <AdminSettings />
+                </AdminLayout>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/admin/billing"
             element={
-              <AdminLayout>
-                <AdminBilling />
-              </AdminLayout>
+              <ProtectedRoute role="admin">
+                <AdminLayout>
+                  <AdminBilling />
+                </AdminLayout>
+              </ProtectedRoute>
             }
           />
 

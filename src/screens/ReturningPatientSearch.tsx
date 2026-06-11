@@ -5,18 +5,60 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Search, UserPlus, User } from 'lucide-react';
 import { mockPatients } from '../data/mockPatients';
+import { useApp } from '../context/AppContext';
+
+type PatientRecord = {
+  id: string;
+  name: string;
+  age: string;
+  gender: string;
+  mobile: string;
+  bloodGroup: string;
+  selectedConditions: string[];
+  address?: string;
+  lastVisit?: string;
+};
 
 export function ReturningPatientSearch() {
   const navigate = useNavigate();
+  const { tokens } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPatient, setSelectedPatient] = useState<typeof mockPatients[0] | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
 
-  const filteredPatients = mockPatients.filter(
-    (patient) =>
-      patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.mobile.includes(searchTerm) ||
-      patient.id.toLowerCase().includes(searchTerm.toLowerCase())
+  // Build a deduplicated patient list: live session patients take priority over mock data
+  const livePatients: PatientRecord[] = Array.from(
+    new Map(
+      tokens.map((t) => [
+        t.patient.mobile,
+        {
+          id: t.patient.id || t.patient.mobile,
+          name: t.patient.name,
+          age: t.patient.age,
+          gender: t.patient.gender,
+          mobile: t.patient.mobile,
+          bloodGroup: t.patient.bloodGroup,
+          selectedConditions: t.patient.selectedConditions,
+          address: t.patient.address,
+          lastVisit: new Date(t.issuedAt).toISOString().split('T')[0],
+        },
+      ])
+    ).values()
   );
+
+  const liveMobiles = new Set(livePatients.map((p) => p.mobile));
+  const mergedPatients: PatientRecord[] = [
+    ...livePatients,
+    ...mockPatients.filter((p) => !liveMobiles.has(p.mobile)),
+  ];
+
+  const filteredPatients = searchTerm.length === 0
+    ? []
+    : mergedPatients.filter(
+        (patient) =>
+          patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          patient.mobile.includes(searchTerm) ||
+          patient.id.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
   const handleConfirm = () => {
     if (selectedPatient) {

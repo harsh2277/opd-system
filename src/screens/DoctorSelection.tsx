@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Stethoscope, Users, Clock, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { generateTokenNumber } from '../utils/tokenCounter';
 
 export function DoctorSelection() {
   const navigate = useNavigate();
@@ -15,8 +16,7 @@ export function DoctorSelection() {
 
   const handleIssueToken = () => {
     if (selectedDoctor) {
-      // Generate unique token using timestamp
-      const uniqueToken = `OPD-${Date.now().toString().slice(-3)}`;
+      const uniqueToken = generateTokenNumber();
 
       navigate('/token-receipt', {
         state: {
