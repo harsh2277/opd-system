@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '../components/ui/alert-dialog';
-import { Clock, UserPlus, Bell, X, CheckCircle, AlertCircle, Stethoscope, Monitor } from 'lucide-react';
+import { Clock, UserPlus, Bell, X, CheckCircle, AlertCircle, Stethoscope, Monitor, Archive, ChevronDown } from 'lucide-react';
 import { useApp, Token } from '../context/AppContext';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
@@ -27,6 +27,7 @@ export function QueueManagement() {
   const navigate = useNavigate();
   const { tokens, sessionStartTime, currentToken, updateTokenStatus, markTokenUrgent, endSession, callToken } = useApp();
   const [sessionDuration, setSessionDuration] = useState('00:00');
+  const [doneArchived, setDoneArchived] = useState(false);
 
   useEffect(() => {
     if (sessionStartTime) {
@@ -86,12 +87,14 @@ export function QueueManagement() {
     status,
     borderColor,
     textColor,
+    onArchive,
   }: {
     title: string;
     items: typeof tokens;
     status: 'waiting' | 'in-consultation' | 'done' | 'skipped';
     borderColor: string;
     textColor: string;
+    onArchive?: () => void;
   }) => (
     <div
       className="flex-1 flex flex-col bg-white border border-[var(--neutral-200)] rounded-xl overflow-hidden min-w-[250px]"
@@ -105,7 +108,19 @@ export function QueueManagement() {
     >
       <div className={`px-4 py-3 border-b-2 ${borderColor} bg-white flex items-center justify-between`}>
         <span className={`font-semibold text-xs uppercase tracking-wider ${textColor}`}>{title}</span>
-        <span className="bg-[var(--neutral-100)] border border-[var(--neutral-200)] text-[var(--neutral-600)] px-2 py-0.5 rounded-md text-xs font-semibold">{items.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="bg-[var(--neutral-100)] border border-[var(--neutral-200)] text-[var(--neutral-600)] px-2 py-0.5 rounded-md text-xs font-semibold">{items.length}</span>
+          {onArchive && items.length > 0 && (
+            <button
+              onClick={onArchive}
+              title="Collapse Done column"
+              className="flex items-center gap-1 text-[10px] font-semibold text-[var(--success-600)] hover:text-[var(--success-800)] transition-colors"
+            >
+              <Archive size={11} />
+              Collapse
+            </button>
+          )}
+        </div>
       </div>
       <div className="p-3 space-y-3 min-h-[450px] bg-white overflow-y-auto max-h-[600px] flex-1">
         {items.length > 0 ? (
@@ -205,8 +220,17 @@ export function QueueManagement() {
             </div>
           ))
         ) : (
-          <div className="text-center py-12 text-xs text-neutral-400">
-            No tokens in this status
+          <div className="text-center py-12 flex flex-col items-center gap-2">
+            <p className="text-xs text-neutral-400">No tokens in this status</p>
+            {status === 'waiting' && (
+              <button
+                onClick={() => navigate('/patient-type')}
+                className="text-xs font-semibold text-[var(--brand-600)] hover:underline flex items-center gap-1"
+              >
+                <UserPlus size={12} />
+                Register first patient →
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -304,13 +328,27 @@ export function QueueManagement() {
           borderColor="border-[var(--brand-500)]"
           textColor="text-[var(--brand-700)]"
         />
-        <Column
-          title="DONE"
-          items={doneTokens}
-          status="done"
-          borderColor="border-[var(--success-500)]"
-          textColor="text-[var(--success-700)]"
-        />
+        {doneArchived ? (
+          <div
+            className="flex flex-col items-center justify-center bg-white border border-[var(--neutral-200)] rounded-xl w-16 flex-shrink-0 py-4 gap-2 cursor-pointer hover:bg-[var(--neutral-50)] transition-colors"
+            onClick={() => setDoneArchived(false)}
+            title="Expand Done column"
+          >
+            <Archive size={14} className="text-[var(--success-500)]" />
+            <span className="text-[10px] font-bold text-[var(--success-700)]" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
+              DONE ({doneTokens.length})
+            </span>
+          </div>
+        ) : (
+          <Column
+            title="DONE"
+            items={doneTokens}
+            status="done"
+            borderColor="border-[var(--success-500)]"
+            textColor="text-[var(--success-700)]"
+            onArchive={() => setDoneArchived(true)}
+          />
+        )}
         <Column
           title="SKIPPED"
           items={skippedTokens}

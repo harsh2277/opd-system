@@ -38,6 +38,7 @@ export function DoctorDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
   const [selectedPatientHistory, setSelectedPatientHistory] = useState<any[]>([]);
+  const [pendingStatus, setPendingStatus] = useState<'break' | 'lunch' | null>(null);
 
   useEffect(() => {
     const data = localStorage.getItem('current-doctor');
@@ -170,23 +171,43 @@ export function DoctorDashboard() {
           <p className="px-2 text-[10px] font-semibold text-[var(--neutral-400)] uppercase tracking-wider mb-1">My Status</p>
           {currentDoctor.status !== 'on-duty' ? (
             <button
-              onClick={() => { updateDoctorStatus(currentDoctor.id, 'on-duty'); setCurrentDoctor({ ...currentDoctor, status: 'on-duty' }); }}
+              onClick={() => { updateDoctorStatus(currentDoctor.id, 'on-duty'); setCurrentDoctor({ ...currentDoctor, status: 'on-duty' }); setPendingStatus(null); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--success-700)] bg-[var(--success-50)] hover:bg-[var(--success-100)] transition-colors"
             >
               <CircleCheck size={13} />
               Back on Duty
             </button>
+          ) : pendingStatus ? (
+            <div className="space-y-1">
+              <p className="text-[10px] text-[var(--warning-700)] font-semibold px-1">
+                Confirm going on {pendingStatus}?
+              </p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => { updateDoctorStatus(currentDoctor.id, pendingStatus); setCurrentDoctor({ ...currentDoctor, status: pendingStatus as any }); setPendingStatus(null); }}
+                  className="flex-1 py-1.5 rounded-md text-xs font-semibold text-white bg-[var(--warning-500)] hover:bg-[var(--warning-600)] transition-colors"
+                >
+                  Yes, {pendingStatus}
+                </button>
+                <button
+                  onClick={() => setPendingStatus(null)}
+                  className="flex-1 py-1.5 rounded-md text-xs font-medium text-[var(--neutral-600)] bg-[var(--neutral-100)] hover:bg-[var(--neutral-200)] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="flex gap-1">
               <button
-                onClick={() => { updateDoctorStatus(currentDoctor.id, 'break'); setCurrentDoctor({ ...currentDoctor, status: 'break' as any }); }}
+                onClick={() => setPendingStatus('break')}
                 className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-[var(--warning-700)] bg-[var(--warning-50)] hover:bg-[var(--warning-100)] transition-colors border border-[var(--warning-200)]"
               >
                 <Coffee size={12} />
                 Break
               </button>
               <button
-                onClick={() => { updateDoctorStatus(currentDoctor.id, 'lunch'); setCurrentDoctor({ ...currentDoctor, status: 'lunch' as any }); }}
+                onClick={() => setPendingStatus('lunch')}
                 className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-[var(--warning-700)] bg-[var(--warning-50)] hover:bg-[var(--warning-100)] transition-colors border border-[var(--warning-200)]"
               >
                 <UtensilsCrossed size={12} />
@@ -379,12 +400,15 @@ export function DoctorDashboard() {
                       </div>
                     </>
                   ) : (
-                    <div className="py-20 text-center">
-                      <div className="w-10 h-10 border border-[var(--neutral-200)] rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <div className="py-20 text-center flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 border border-[var(--neutral-200)] rounded-lg flex items-center justify-center mx-auto mb-1">
                         <Users size={18} className="text-[var(--neutral-300)]" />
                       </div>
                       <p className="text-sm font-medium text-[var(--neutral-900)]">Queue is empty</p>
-                      <p className="text-xs text-[var(--neutral-400)] mt-1">No patients waiting right now</p>
+                      <p className="text-xs text-[var(--neutral-400)]">No patients waiting right now</p>
+                      <p className="text-[10px] text-[var(--neutral-400)] mt-1 bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded px-3 py-1.5">
+                        Ask reception to check-in patients for your queue
+                      </p>
                     </div>
                   )}
                 </div>

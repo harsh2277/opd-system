@@ -23,9 +23,55 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const performLogin = async (emailVal: string, passVal: string) => {
+    setLoading(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    const trimmedEmail = emailVal.trim().toLowerCase();
+
+    if (trimmedEmail === 'harsh@gmail.com' && passVal === 'harsh123') {
+      const receptionUser = { id: 'RC001', name: 'Harsh Reception', email: 'harsh@gmail.com', role: 'Receptionist' };
+      clearDemoUsers();
+      localStorage.setItem('current-reception-user', JSON.stringify(receptionUser));
+      startSession();
+      toast.success('Welcome back, Receptionist!');
+      navigate('/dashboard');
+    } else if (DOCTOR_CREDENTIALS[trimmedEmail] && passVal === DOCTOR_CREDENTIALS[trimmedEmail].password) {
+      const doctorId = DOCTOR_CREDENTIALS[trimmedEmail].id;
+      const matchedDoctor = doctors.find((d) => d.id === doctorId) || doctors[0];
+      clearDemoUsers();
+      localStorage.setItem('current-doctor', JSON.stringify(matchedDoctor));
+      toast.success(`Welcome, ${matchedDoctor.name}`);
+      navigate('/doctor-dashboard');
+    } else if (trimmedEmail === 'pharmacy@gmail.com' && passVal === 'pharmacy123') {
+      const mockUser = { id: 'PH003', name: 'Pharmacy Staff', email: 'pharmacy@gmail.com', role: 'Pharmacy Staff', loginAt: new Date().toISOString() };
+      clearDemoUsers();
+      localStorage.setItem('current-pharmacy-user', JSON.stringify(mockUser));
+      toast.success('Welcome to Pharmacy Portal!');
+      navigate('/pharmacy-dashboard');
+    } else if (trimmedEmail === 'lab@gmail.com' && passVal === 'lab123') {
+      const mockUser = { id: 'LB001', name: 'Lab Staff', email: 'lab@gmail.com', role: 'Chief Pathologist', loginAt: new Date().toISOString() };
+      clearDemoUsers();
+      localStorage.setItem('current-lab-user', JSON.stringify(mockUser));
+      toast.success('Welcome to Lab Portal!');
+      navigate('/lab-dashboard');
+    } else if (trimmedEmail === 'admin@gmail.com' && passVal === 'admin123') {
+      const adminUser = { id: 'ADM001', name: 'Prem Admin', email: 'admin@gmail.com', role: 'Administrator' };
+      clearDemoUsers();
+      localStorage.setItem('current-admin-user', JSON.stringify(adminUser));
+      toast.success('Welcome to Admin Portal!');
+      navigate('/admin/dashboard');
+    } else {
+      toast.error('Invalid email or password. Please try again.');
+    }
+
+    setLoading(false);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    await performLogin(email, password);
 
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 800));
@@ -84,7 +130,6 @@ export function Login() {
       toast.error('Invalid email or password. Please try again.');
     }
 
-    setLoading(false);
   };
 
   return (
@@ -152,7 +197,7 @@ export function Login() {
                 type="button"
                 variant="line"
                 size="sm"
-                onClick={() => { setEmail('harsh@gmail.com'); setPassword('harsh123'); }}
+                onClick={() => performLogin('harsh@gmail.com', 'harsh123')}
                 className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
               >
                 Receptionist
@@ -161,7 +206,7 @@ export function Login() {
                 type="button"
                 variant="line"
                 size="sm"
-                onClick={() => { setEmail('pharmacy@gmail.com'); setPassword('pharmacy123'); }}
+                onClick={() => performLogin('pharmacy@gmail.com', 'pharmacy123')}
                 className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
               >
                 Pharmacy
@@ -170,7 +215,7 @@ export function Login() {
                 type="button"
                 variant="line"
                 size="sm"
-                onClick={() => { setEmail('lab@gmail.com'); setPassword('lab123'); }}
+                onClick={() => performLogin('lab@gmail.com', 'lab123')}
                 className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
               >
                 Lab
@@ -179,7 +224,7 @@ export function Login() {
                 type="button"
                 variant="line"
                 size="sm"
-                onClick={() => { setEmail('admin@gmail.com'); setPassword('admin123'); }}
+                onClick={() => performLogin('admin@gmail.com', 'admin123')}
                 className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
               >
                 Admin
@@ -194,7 +239,7 @@ export function Login() {
                   type="button"
                   variant="line"
                   size="sm"
-                  onClick={() => { setEmail(email); setPassword(password); }}
+                  onClick={() => performLogin(email, password)}
                   className="text-xs h-9 border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] text-[var(--neutral-600)]"
                 >
                   {label}

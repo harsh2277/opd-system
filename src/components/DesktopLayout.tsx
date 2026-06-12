@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import {
@@ -44,6 +44,18 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
   const portalUser = getPortalUser();
   const portalLabel = 'Reception Portal';
   const visibleNavGroups = navGroups;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'n') navigate('/patient-type');
+      else if (e.key === 'q') navigate('/queue');
+      else if (e.key === 'b') navigate('/billing');
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigate]);
 
   const handleNavClick = (e: React.MouseEvent, path: string, external?: boolean) => {
     if (external) {
@@ -221,6 +233,20 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto p-6">{children}</main>
+
+        {/* Keyboard shortcut hint bar */}
+        <div className="h-7 bg-[var(--neutral-50)] border-t border-[var(--neutral-200)] flex items-center px-6 gap-4 flex-shrink-0">
+          {[
+            { key: 'N', label: 'New check-in' },
+            { key: 'Q', label: 'Queue' },
+            { key: 'B', label: 'Billing' },
+          ].map(({ key, label }) => (
+            <span key={key} className="flex items-center gap-1.5 text-[10px] text-[var(--neutral-400)]">
+              <kbd className="px-1.5 py-0.5 text-[9px] font-semibold bg-white border border-[var(--neutral-300)] rounded shadow-sm text-[var(--neutral-600)]">{key}</kbd>
+              {label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

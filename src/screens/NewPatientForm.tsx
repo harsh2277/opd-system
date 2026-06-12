@@ -24,6 +24,7 @@ export function NewPatientForm() {
     selectedConditions: [] as string[],
     address: '',
   });
+  const [customCondition, setCustomCondition] = useState('');
 
   const handleConditionToggle = (condition: string) => {
     setFormData((prev) => ({
@@ -196,7 +197,7 @@ export function NewPatientForm() {
 
               <div>
                 <label className="text-sm font-medium text-[var(--neutral-700)] mb-2 block">Known Conditions</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-2">
                   {conditions.map((condition) => (
                     <Button
                       key={condition}
@@ -208,6 +209,57 @@ export function NewPatientForm() {
                       {condition}
                     </Button>
                   ))}
+                  {/* Custom added conditions as removable chips */}
+                  {formData.selectedConditions
+                    .filter((c) => !conditions.includes(c))
+                    .map((c) => (
+                      <span
+                        key={c}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--brand-50)] border border-[var(--brand-200)] text-[var(--brand-700)]"
+                      >
+                        {c}
+                        <button
+                          type="button"
+                          onClick={() => handleConditionToggle(c)}
+                          className="text-[var(--brand-400)] hover:text-[var(--brand-700)] leading-none"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                </div>
+                {/* Custom condition input */}
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={customCondition}
+                    onChange={(e) => setCustomCondition(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = customCondition.trim();
+                        if (val && !formData.selectedConditions.includes(val)) {
+                          setFormData((prev) => ({ ...prev, selectedConditions: [...prev.selectedConditions, val] }));
+                        }
+                        setCustomCondition('');
+                      }
+                    }}
+                    placeholder="Other condition…"
+                    className="flex-1 px-3 py-1.5 text-xs border border-[var(--neutral-200)] rounded-md focus:outline-none focus:border-[var(--brand-400)] bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = customCondition.trim();
+                      if (val && !formData.selectedConditions.includes(val)) {
+                        setFormData((prev) => ({ ...prev, selectedConditions: [...prev.selectedConditions, val] }));
+                      }
+                      setCustomCondition('');
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-md bg-[var(--neutral-100)] hover:bg-[var(--neutral-200)] text-[var(--neutral-700)] transition-colors border border-[var(--neutral-200)]"
+                  >
+                    Add
+                  </button>
                 </div>
               </div>
 
