@@ -217,10 +217,12 @@ export function TVDisplay() {
                     <p className="font-mono text-3xl font-bold text-[var(--neutral-900)] mb-2 mt-2">
                       {token.token}
                     </p>
-                    <div className="w-full text-center border-t border-[var(--neutral-100)] pt-2 mt-2">
-                      <p className="text-[10px] text-[var(--neutral-400)]">Doctor</p>
+                    <div className="w-full text-center border-t border-[var(--neutral-100)] pt-2 mt-2 space-y-1">
                       <p className="text-xs font-semibold text-[var(--neutral-700)] truncate">
                         {token.doctor.name}
+                      </p>
+                      <p className="text-[10px] text-[var(--brand-600)] font-semibold">
+                        ~{(index + 1) * (token.doctor.avgWait || 15)} min wait
                       </p>
                     </div>
                   </div>

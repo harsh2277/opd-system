@@ -7,6 +7,27 @@ export interface Medicine {
   instructions: string;
 }
 
+export interface PrescriptionTemplate {
+  id: string;
+  name: string;
+  medicines: Medicine[];
+}
+
+export interface Appointment {
+  id: string;
+  patientName: string;
+  patientMobile: string;
+  patientAge?: string;
+  patientGender?: string;
+  doctorId: string;
+  doctorName: string;
+  date: string;
+  time: string;
+  notes?: string;
+  status: 'scheduled' | 'arrived' | 'cancelled';
+  createdAt: string;
+}
+
 export interface LabTestRequest {
   name: string;
   notes?: string;
@@ -36,13 +57,14 @@ export interface Doctor {
 }
 
 export interface Token {
-  id: string; // Unique identifier for React keys
+  id: string;
   token: string;
   patient: Patient;
   doctor: Doctor;
   issuedAt: string;
   status: 'waiting' | 'in-consultation' | 'done' | 'skipped';
   calledAt?: string;
+  smsSentAt?: string;
   urgent: boolean;
   prescription?: Medicine[];
   prescriptionStatus?: 'pending' | 'dispensed';
@@ -74,6 +96,8 @@ interface AppContextType {
   sessionStartTime: Date | null;
   currentToken: string | null;
   notifications: Notification[];
+  prescriptionTemplates: PrescriptionTemplate[];
+  appointments: Appointment[];
   addToken: (token: Token) => void;
   addDoctor: (doctor: Doctor) => void;
   updateTokenStatus: (tokenNumber: string, status: Token['status']) => void;
@@ -83,6 +107,7 @@ interface AppContextType {
   endSession: () => void;
   callNextToken: (doctorId: string) => void;
   callToken: (tokenNumber: string) => void;
+  sendSMS: (tokenNumber: string) => void;
   addPrescription: (tokenNumber: string, medicines: Medicine[]) => void;
   dispensePrescription: (tokenNumber: string, updatedMedicines: Medicine[], amount: number) => void;
   settleBilling: (tokenNumber: string, consultationPaid: boolean, prescriptionPaid: boolean, labPaid: boolean, amount: number, paymentMethod?: 'upi' | 'cash' | 'card') => void;
@@ -92,6 +117,10 @@ interface AppContextType {
   addNotification: (text: string, type?: Notification['type']) => void;
   clearNotifications: () => void;
   markNotificationsAsRead: () => void;
+  savePrescriptionTemplate: (name: string, medicines: Medicine[]) => void;
+  deletePrescriptionTemplate: (id: string) => void;
+  addAppointment: (appt: Omit<Appointment, 'id' | 'createdAt'>) => void;
+  updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -131,6 +160,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [prescriptionTemplates, setPrescriptionTemplates] = useState<PrescriptionTemplate[]>(() => {
+    const saved = localStorage.getItem('opd-rx-templates');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [appointments, setAppointments] = useState<Appointment[]>(() => {
+    const saved = localStorage.getItem('opd-appointments');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // Save to localStorage whenever state changes
   useEffect(() => {
     localStorage.setItem('opd-tokens', JSON.stringify(tokens));
@@ -143,6 +182,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem('opd-notifications', JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem('opd-rx-templates', JSON.stringify(prescriptionTemplates));
+  }, [prescriptionTemplates]);
+
+  useEffect(() => {
+    localStorage.setItem('opd-appointments', JSON.stringify(appointments));
+  }, [appointments]);
 
   useEffect(() => {
     if (sessionStartTime) {
@@ -386,9 +433,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const callToken = (tokenNumber: string) => {
     setTokens(prev =>
       prev.map(token =>
-        token.token === tokenNumber ? { ...token, calledAt: new Date().toISOString() } : token
+        token.token === tokenNumber
+          ? { ...token, calledAt: new Date().toISOString(), smsSentAt: new Date().toISOString() }
+          : token
       )
     );
+  };
+
+  const sendSMS = (tokenNumber: string) => {
+    setTokens(prev =>
+      prev.map(token =>
+        token.token === tokenNumber ? { ...token, smsSentAt: new Date().toISOString() } : token
+      )
+    );
+  };
+
+  const savePrescriptionTemplate = (name: string, medicines: Medicine[]) => {
+    const template: PrescriptionTemplate = {
+      id: `tpl-${Date.now()}`,
+      name,
+      medicines,
+    };
+    setPrescriptionTemplates(prev => [template, ...prev]);
+  };
+
+  const deletePrescriptionTemplate = (id: string) => {
+    setPrescriptionTemplates(prev => prev.filter(t => t.id !== id));
+  };
+
+  const addAppointment = (appt: Omit<Appointment, 'id' | 'createdAt'>) => {
+    const newAppt: Appointment = {
+      ...appt,
+      id: `appt-${Date.now()}-${Math.random()}`,
+      createdAt: new Date().toISOString(),
+    };
+    setAppointments(prev => [...prev, newAppt]);
+  };
+
+  const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
   };
 
   const startSession = () => {
@@ -416,20 +499,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-      tokens,
-      doctors,
-      sessionStartTime,
-      currentToken,
-      notifications,
-      addToken,
-      addDoctor,
-      updateTokenStatus,
+        tokens,
+        doctors,
+        sessionStartTime,
+        currentToken,
+        notifications,
+        prescriptionTemplates,
+        appointments,
+        addToken,
+        addDoctor,
+        updateTokenStatus,
         updateDoctorStatus,
         markTokenUrgent,
         startSession,
         endSession,
         callNextToken,
         callToken,
+        sendSMS,
         addPrescription,
         dispensePrescription,
         settleBilling,
@@ -439,6 +525,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addNotification,
         clearNotifications,
         markNotificationsAsRead,
+        savePrescriptionTemplate,
+        deletePrescriptionTemplate,
+        addAppointment,
+        updateAppointmentStatus,
       }}
     >
       {children}

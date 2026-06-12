@@ -78,7 +78,52 @@ export function BillingManagement() {
   };
 
   const handlePrint = (t: Token) => {
-    toast.success(`Receipt printed for Token ${t.token}`);
+    const b = getBillBreakdown(t);
+    const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const html = `<!DOCTYPE html><html><head><title>OPD Visit Summary – ${t.token}</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 480px; margin: 40px auto; font-size: 13px; color: #111; }
+      h1 { font-size: 18px; margin: 0 0 2px; } h2 { font-size: 13px; color: #555; margin: 0 0 20px; font-weight: normal; }
+      .token { font-size: 32px; font-weight: bold; font-family: monospace; text-align: center; background: #f5f5f5; padding: 12px; border-radius: 8px; margin: 16px 0; }
+      table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+      td { padding: 5px 2px; } td:last-child { text-align: right; font-weight: 600; }
+      tr.total td { border-top: 2px solid #111; font-weight: bold; font-size: 14px; padding-top: 8px; }
+      .section { margin: 16px 0; } .section-title { font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 8px; color: #333; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+      .paid { background: #dcfce7; color: #166534; } .pending { background: #fef9c3; color: #854d0e; }
+      @media print { body { margin: 20px; } }
+    </style></head><body>
+    <h1>OPD Management System</h1>
+    <h2>Patient Visit Summary · ${date}</h2>
+    <div class="token">${t.token}</div>
+    <div class="section"><div class="section-title">Patient</div>
+      <table>
+        <tr><td>Name</td><td>${t.patient.name}</td></tr>
+        <tr><td>Age / Gender</td><td>${t.patient.age} yrs · ${t.patient.gender}</td></tr>
+        <tr><td>Mobile</td><td>${t.patient.mobile}</td></tr>
+        <tr><td>Type</td><td>${t.isNewPatient ? 'New Patient' : 'Returning Patient'}</td></tr>
+      </table>
+    </div>
+    <div class="section"><div class="section-title">Consultation</div>
+      <table>
+        <tr><td>Doctor</td><td>${t.doctor.name}</td></tr>
+        <tr><td>Specialty</td><td>${t.doctor.specialty}</td></tr>
+      </table>
+    </div>
+    ${(t.prescription?.length || 0) > 0 ? `<div class="section"><div class="section-title">Prescription</div><table>${(t.prescription || []).map(m => `<tr><td>${m.name}</td><td>${m.dosage} · ${m.duration}</td></tr>`).join('')}</table></div>` : ''}
+    ${(t.labTests?.length || 0) > 0 ? `<div class="section"><div class="section-title">Lab Tests</div><table>${(t.labTests || []).map(l => `<tr><td>${l.name}</td><td class="${l.status === 'completed' ? 'paid' : 'pending'}">${l.status === 'completed' ? '✓ Done' : 'Pending'}</td></tr>`).join('')}</table></div>` : ''}
+    <div class="section"><div class="section-title">Billing</div>
+      <table>
+        <tr><td>Consultation</td><td>₹${b.consultationFee}</td></tr>
+        ${b.medicineFee > 0 ? `<tr><td>Pharmacy</td><td>₹${b.medicineFee}</td></tr>` : ''}
+        ${b.labTestFee > 0 ? `<tr><td>Lab Tests</td><td>₹${b.labTestFee}</td></tr>` : ''}
+        <tr class="total"><td>Total</td><td>₹${b.total}</td></tr>
+      </table>
+      <p>Status: <span class="badge ${isPending(t) ? 'pending' : 'paid'}">${isPending(t) ? 'Payment Pending' : 'Fully Settled'}</span></p>
+    </div>
+    <script>window.onload = () => { window.print(); }</script></body></html>`;
+    const w = window.open('', '_blank', 'width=600,height=800');
+    if (w) { w.document.write(html); w.document.close(); }
   };
 
   const tabs: { key: BillingTab; label: string; count: number; color: string }[] = [

@@ -188,7 +188,7 @@ function SearchableDropdown({ value, onChange, options, placeholder, className =
 export function DoctorPatientDetails() {
   const navigate = useNavigate();
   const { tokenId } = useParams();
-  const { tokens, updateTokenStatus, updateDoctorStatus, addPrescription, requestLabTests, addNotification } = useApp();
+  const { tokens, updateTokenStatus, updateDoctorStatus, addPrescription, requestLabTests, addNotification, prescriptionTemplates, savePrescriptionTemplate, deletePrescriptionTemplate } = useApp();
   const [token, setToken] = useState<any>(null);
   const [currentDoctor, setCurrentDoctor] = useState<any>(null);
   const [history, setHistory] = useState<ConsultationNote[]>([]);
@@ -201,6 +201,8 @@ export function DoctorPatientDetails() {
   const [labNotes, setLabNotes] = useState('');
   const [labSent, setLabSent] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateName, setTemplateName] = useState('');
 
   const handleUpdateStatus = (status: 'on-duty' | 'off-duty' | 'break' | 'lunch') => {
     if (currentDoctor) {
@@ -668,16 +670,81 @@ export function DoctorPatientDetails() {
                           <span className="text-xs text-[var(--neutral-400)]">({medicines.length})</span>
                         )}
                       </div>
-                      {medicines.length > 0 && (
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={handleSendToPharmacy}
-                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--teal-300)] hover:text-[var(--teal-600)] rounded-md transition-colors"
+                          onClick={() => setShowTemplates(v => !v)}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)] rounded-md transition-colors"
                         >
-                          <Send size={11} />
-                          Send to Pharmacy
+                          Templates {prescriptionTemplates.length > 0 && <span className="bg-[var(--brand-500)] text-white rounded-full px-1.5 text-[9px]">{prescriptionTemplates.length}</span>}
                         </button>
-                      )}
+                        {medicines.length > 0 && (
+                          <button
+                            onClick={handleSendToPharmacy}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--teal-300)] hover:text-[var(--teal-600)] rounded-md transition-colors"
+                          >
+                            <Send size={11} />
+                            Send to Pharmacy
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Templates panel */}
+                    {showTemplates && (
+                      <div className="mb-3 p-3 bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-lg space-y-2">
+                        {prescriptionTemplates.length > 0 ? (
+                          <>
+                            <p className="text-[10px] font-semibold text-[var(--neutral-500)] uppercase tracking-wider">Saved Templates</p>
+                            {prescriptionTemplates.map(tpl => (
+                              <div key={tpl.id} className="flex items-center justify-between bg-white border border-[var(--neutral-200)] rounded-md px-3 py-2">
+                                <div>
+                                  <p className="text-xs font-semibold text-[var(--neutral-800)]">{tpl.name}</p>
+                                  <p className="text-[10px] text-[var(--neutral-400)]">{tpl.medicines.length} medicine(s)</p>
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => { setMedicines(tpl.medicines); toast.success(`Template "${tpl.name}" loaded`); setShowTemplates(false); }}
+                                    className="text-[10px] font-semibold px-2 py-1 bg-[var(--brand-50)] border border-[var(--brand-200)] text-[var(--brand-700)] rounded hover:bg-[var(--brand-100)] transition-colors"
+                                  >
+                                    Load
+                                  </button>
+                                  <button
+                                    onClick={() => { deletePrescriptionTemplate(tpl.id); toast.info('Template deleted'); }}
+                                    className="text-[10px] font-semibold px-2 py-1 bg-white border border-[var(--neutral-200)] text-[var(--neutral-500)] rounded hover:bg-[var(--error-50)] hover:border-[var(--error-200)] hover:text-[var(--error-600)] transition-colors"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <p className="text-xs text-[var(--neutral-400)] text-center py-2">No templates saved yet</p>
+                        )}
+                        {medicines.length > 0 && (
+                          <div className="flex gap-2 pt-1 border-t border-[var(--neutral-100)]">
+                            <input
+                              type="text"
+                              value={templateName}
+                              onChange={e => setTemplateName(e.target.value)}
+                              placeholder="Template name (e.g. Flu Protocol)"
+                              className="flex-1 px-2.5 py-1.5 text-xs border border-[var(--neutral-200)] rounded-md focus:outline-none focus:border-[var(--brand-400)]"
+                            />
+                            <button
+                              onClick={() => {
+                                if (!templateName.trim()) { toast.error('Enter a template name'); return; }
+                                savePrescriptionTemplate(templateName.trim(), medicines);
+                                setTemplateName('');
+                                toast.success(`Template "${templateName.trim()}" saved`);
+                              }}
+                              className="text-xs font-semibold px-3 py-1.5 bg-[var(--brand-500)] hover:bg-[var(--brand-700)] text-white rounded-md transition-colors"
+                            >
+                              Save current as template
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Add medicine */}
                     <div className="flex gap-2 mb-3">

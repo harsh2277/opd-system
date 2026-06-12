@@ -28,6 +28,10 @@ export function QueueManagement() {
   const { tokens, sessionStartTime, currentToken, updateTokenStatus, markTokenUrgent, endSession, callToken } = useApp();
   const [sessionDuration, setSessionDuration] = useState('00:00');
   const [doneArchived, setDoneArchived] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [sessionSummary, setSessionSummary] = useState<{
+    total: number; completed: number; skipped: number; pending: number; revenue: number; duration: string;
+  } | null>(null);
 
   useEffect(() => {
     if (sessionStartTime) {
@@ -65,6 +69,18 @@ export function QueueManagement() {
   };
 
   const handleEndSession = () => {
+    const total = tokens.length;
+    const completed = tokens.filter(t => t.status === 'done').length;
+    const skipped = tokens.filter(t => t.status === 'skipped').length;
+    const pending = tokens.filter(t => t.status === 'waiting' || t.status === 'in-consultation').length;
+    const revenue = tokens.reduce((sum, t) => {
+      const consultation = t.isNewPatient ? 500 : 300;
+      const pharmacy = (t.prescription?.length || 0) * 150;
+      const lab = (t.labTests?.length || 0) * 250;
+      return sum + consultation + pharmacy + lab;
+    }, 0);
+    setSessionSummary({ total, completed, skipped, pending, revenue, duration: sessionDuration });
+    setShowSummary(true);
     endSession();
     toast.success('Session ended');
   };
@@ -165,9 +181,11 @@ export function QueueManagement() {
                 {status === 'waiting' && (
                   <>
                     {item.calledAt ? (
-                      <div className="flex-1 py-1.5 px-3 bg-[var(--warning-50)] border border-[var(--warning-200)] text-[var(--warning-700)] rounded-md text-xs flex items-center justify-center gap-1.5 font-medium select-none">
-                        <Bell size={12} />
-                        Called — Awaiting Doctor
+                      <div className="flex-1 py-1.5 px-3 bg-[var(--warning-50)] border border-[var(--warning-200)] text-[var(--warning-700)] rounded-md text-xs flex flex-col items-center justify-center gap-0.5 font-medium select-none">
+                        <span className="flex items-center gap-1"><Bell size={11} />Called — Awaiting Doctor</span>
+                        {item.smsSentAt && (
+                          <span className="text-[9px] text-[var(--success-600)] font-semibold">✓ SMS sent · +91 {item.patient.mobile}</span>
+                        )}
                       </div>
                     ) : (
                       <button
@@ -357,6 +375,56 @@ export function QueueManagement() {
           textColor="text-[var(--neutral-700)]"
         />
       </div>
+
+      {/* Session Summary Modal */}
+      {showSummary && sessionSummary && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setShowSummary(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-lg w-full max-w-md mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="h-2 bg-[var(--brand-500)]" />
+            <div className="p-6 space-y-5">
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-[var(--success-100)] flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle size={24} className="text-[var(--success-600)]" />
+                </div>
+                <h2 className="text-lg font-bold text-[var(--neutral-900)]">Session Complete</h2>
+                <p className="text-xs text-[var(--neutral-500)] mt-0.5">Duration: {sessionSummary.duration}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ['Total Tokens', sessionSummary.total, 'var(--neutral-700)'],
+                  ['Completed', sessionSummary.completed, 'var(--success-600)'],
+                  ['Pending / Left', sessionSummary.pending, 'var(--warning-600)'],
+                  ['Skipped', sessionSummary.skipped, 'var(--neutral-500)'],
+                ].map(([label, value, color]) => (
+                  <div key={String(label)} className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold" style={{ color: String(color) }}>{value}</p>
+                    <p className="text-xs text-[var(--neutral-500)] mt-0.5">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-[var(--brand-50)] border border-[var(--brand-200)] rounded-lg p-4 text-center">
+                <p className="text-xs text-[var(--brand-500)] font-semibold uppercase tracking-wider mb-1">Total Revenue Generated</p>
+                <p className="text-3xl font-bold text-[var(--brand-700)]">₹{sessionSummary.revenue.toLocaleString('en-IN')}</p>
+              </div>
+
+              <button
+                onClick={() => setShowSummary(false)}
+                className="w-full py-2.5 text-sm font-semibold text-white bg-[var(--brand-500)] hover:bg-[var(--brand-700)] rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { AdminSettings } from './screens/admin/AdminSettings';
 import { AdminBilling } from './screens/admin/AdminBilling';
 import { AdminAddUser } from './screens/admin/AdminAddUser';
 import { BillingManagement } from './screens/BillingManagement';
+import { Appointments } from './screens/Appointments';
 import { UiShowcase } from './screens/UiShowcase';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -126,6 +127,16 @@ export default function App() {
               <ProtectedRoute role="reception">
                 <DesktopLayout>
                   <BillingManagement />
+                </DesktopLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/appointments"
+            element={
+              <ProtectedRoute role="reception">
+                <DesktopLayout>
+                  <Appointments />
                 </DesktopLayout>
               </ProtectedRoute>
             }

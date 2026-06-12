@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronRight,
   Receipt,
+  CalendarClock,
 } from 'lucide-react';
 
 interface DesktopLayoutProps {
@@ -32,6 +33,7 @@ const navGroups = [
       { icon: ListChecks, label: 'Queue', path: '/queue' },
       { icon: Users, label: 'Patient Records', path: '/patients' },
       { icon: Receipt, label: 'Billing', path: '/billing' },
+      { icon: CalendarClock, label: 'Appointments', path: '/appointments' },
     ],
   },
 ];
@@ -52,6 +54,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
       if (e.key === 'n') navigate('/patient-type');
       else if (e.key === 'q') navigate('/queue');
       else if (e.key === 'b') navigate('/billing');
+      else if (e.key === 'a') navigate('/appointments');
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -240,6 +243,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
             { key: 'N', label: 'New check-in' },
             { key: 'Q', label: 'Queue' },
             { key: 'B', label: 'Billing' },
+          { key: 'A', label: 'Appointments' },
           ].map(({ key, label }) => (
             <span key={key} className="flex items-center gap-1.5 text-[10px] text-[var(--neutral-400)]">
               <kbd className="px-1.5 py-0.5 text-[9px] font-semibold bg-white border border-[var(--neutral-300)] rounded shadow-sm text-[var(--neutral-600)]">{key}</kbd>

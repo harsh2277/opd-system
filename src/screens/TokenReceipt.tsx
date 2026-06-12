@@ -12,7 +12,7 @@ export function TokenReceipt() {
   const navigate = useNavigate();
   const location = useLocation();
   const { patient, doctor, isNew } = location.state || {};
-  const { addToken } = useApp();
+  const { addToken, tokens, sendSMS } = useApp();
   const [hasAddedToken, setHasAddedToken] = useState(false);
   const [isIssued, setIsIssued] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
@@ -57,7 +57,8 @@ export function TokenReceipt() {
   };
 
   const handleSMS = () => {
-    toast.success(`SMS sent to ${patient?.mobile || 'patient'}`);
+    if (issuedToken) sendSMS(issuedToken);
+    toast.success(`SMS sent to +91 ${patient?.mobile || 'XXXXXXXXXX'} — Token ${issuedToken}`);
   };
 
   const handleNewCheckin = () => {
@@ -209,18 +210,25 @@ export function TokenReceipt() {
                 </div>
               </div>
 
-              {/* Wait Time Info */}
-              <div className="text-center mb-8">
-                <div className="flex items-center justify-center gap-2 mb-1.5">
-                  <Clock size={16} className="text-[var(--neutral-600)]" />
-                  <p className="text-sm text-[var(--neutral-700)]">
-                    <span className="font-semibold">Estimated wait:</span> ~{doctor?.avgWait || 15} minutes
-                  </p>
-                </div>
-                <p className="text-xs text-[var(--neutral-500)]">
-                  Queue position: {(doctor?.queue || 3) + 1}th in line
-                </p>
-              </div>
+              {/* Wait Time Info — computed from live queue */}
+              {(() => {
+                const queueAhead = tokens.filter(
+                  t => t.doctor.id === doctor?.id && t.status === 'waiting' && t.token !== issuedToken
+                ).length;
+                const position = queueAhead + 1;
+                const estWait = position * (doctor?.avgWait || 15);
+                return (
+                  <div className="text-center mb-8 p-4 bg-[var(--brand-50)] border border-[var(--brand-100)] rounded-xl">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                      <Clock size={16} className="text-[var(--brand-600)]" />
+                      <p className="text-sm font-semibold text-[var(--brand-700)]">~{estWait} min estimated wait</p>
+                    </div>
+                    <p className="text-xs text-[var(--brand-500)]">
+                      Position {position} in queue · {queueAhead} patient{queueAhead !== 1 ? 's' : ''} ahead
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Action Buttons */}
               <div className="grid grid-cols-3 gap-3">
