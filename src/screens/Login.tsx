@@ -89,6 +89,11 @@ export function Login() {
 
   return (
     <div className="min-h-screen bg-[var(--neutral-100)] flex flex-col items-center justify-center p-6 font-sans">
+      {/* Demo mode warning banner */}
+      <div className="w-full max-w-md mb-3 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--warning-50)] border border-[var(--warning-200)] text-[var(--warning-800)] text-xs">
+        <ShieldCheck size={14} className="flex-shrink-0 text-[var(--warning-600)]" />
+        <span><strong>DEMO MODE</strong> — Credentials are hardcoded for demonstration only. Do not use in production.</span>
+      </div>
       <div className="w-full max-w-md bg-white border border-[var(--neutral-200)] rounded-xl p-8 shadow-sm space-y-6">
         {/* Logo and Headings */}
         <div className="text-center">

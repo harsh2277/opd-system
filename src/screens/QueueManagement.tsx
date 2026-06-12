@@ -12,7 +12,7 @@ import {
   AlertDialogTrigger,
 } from '../components/ui/alert-dialog';
 import { Clock, UserPlus, Bell, X, CheckCircle, AlertCircle, Stethoscope, Monitor } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, Token } from '../context/AppContext';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 
@@ -25,7 +25,7 @@ const statusLeftBorders = {
 
 export function QueueManagement() {
   const navigate = useNavigate();
-  const { tokens, sessionStartTime, currentToken, updateTokenStatus, markTokenUrgent, endSession } = useApp();
+  const { tokens, sessionStartTime, currentToken, updateTokenStatus, markTokenUrgent, endSession, callToken } = useApp();
   const [sessionDuration, setSessionDuration] = useState('00:00');
 
   useEffect(() => {
@@ -42,8 +42,10 @@ export function QueueManagement() {
   }, [sessionStartTime]);
 
   const handleCall = (tokenNumber: string) => {
-    updateTokenStatus(tokenNumber, 'in-consultation');
-    toast.success(`Notification sent to token ${tokenNumber}`);
+    // Only mark as called (adds calledAt timestamp) — status change to in-consultation
+    // happens when the DOCTOR presses "Start Consultation", not from reception side.
+    callToken(tokenNumber);
+    toast.success(`Patient called for token ${tokenNumber} — waiting for doctor to start`);
   };
 
   const handleSkip = (tokenNumber: string) => {
@@ -147,13 +149,20 @@ export function QueueManagement() {
               <div className="flex gap-2 pt-3 border-t border-neutral-100 mt-3">
                 {status === 'waiting' && (
                   <>
-                    <button
-                      onClick={() => handleCall(item.token)}
-                      className="flex-1 py-1.5 px-3 bg-success-500 hover:bg-success-700 text-white rounded-md text-xs flex items-center justify-center gap-1.5 font-medium transition-all cursor-pointer shadow-sm active:scale-95"
-                    >
-                      <Bell size={12} />
-                      Send Notification
-                    </button>
+                    {item.calledAt ? (
+                      <div className="flex-1 py-1.5 px-3 bg-[var(--warning-50)] border border-[var(--warning-200)] text-[var(--warning-700)] rounded-md text-xs flex items-center justify-center gap-1.5 font-medium select-none">
+                        <Bell size={12} />
+                        Called — Awaiting Doctor
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleCall(item.token)}
+                        className="flex-1 py-1.5 px-3 bg-success-500 hover:bg-success-700 text-white rounded-md text-xs flex items-center justify-center gap-1.5 font-medium transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Bell size={12} />
+                        Call Patient
+                      </button>
+                    )}
                     {!item.urgent && (
                       <button
                         onClick={() => handleMarkUrgent(item.token)}

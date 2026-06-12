@@ -40,6 +40,7 @@ export interface Token {
   doctor: Doctor;
   issuedAt: string;
   status: 'waiting' | 'in-consultation' | 'done' | 'skipped';
+  calledAt?: string;
   urgent: boolean;
   prescription?: Medicine[];
   prescriptionStatus?: 'pending' | 'dispensed';
@@ -79,6 +80,7 @@ interface AppContextType {
   startSession: () => void;
   endSession: () => void;
   callNextToken: (doctorId: string) => void;
+  callToken: (tokenNumber: string) => void;
   addPrescription: (tokenNumber: string, medicines: Medicine[]) => void;
   dispensePrescription: (tokenNumber: string, updatedMedicines: Medicine[], amount: number) => void;
   settleBilling: (tokenNumber: string, consultationPaid: boolean, prescriptionPaid: boolean, labPaid: boolean, amount: number, paymentMethod?: 'upi' | 'cash' | 'card') => void;
@@ -177,15 +179,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Update doctor queue counts when tokens change
+  // Update doctor queue counts reactively from live tokens (functional update avoids stale closure)
   useEffect(() => {
-    const updatedDoctors = doctors.map((doctor) => {
-      const waitingCount = tokens.filter(
-        (token) => token.doctor.id === doctor.id && token.status === 'waiting'
-      ).length;
-      return { ...doctor, queue: waitingCount };
-    });
-    setDoctors(updatedDoctors);
+    setDoctors(prev => prev.map(doctor => ({
+      ...doctor,
+      queue: tokens.filter(t => t.doctor.id === doctor.id && t.status === 'waiting').length,
+    })));
   }, [tokens]);
 
   const addToken = (token: Token) => {
@@ -356,11 +355,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const callToken = (tokenNumber: string) => {
+    setTokens(prev =>
+      prev.map(token =>
+        token.token === tokenNumber ? { ...token, calledAt: new Date().toISOString() } : token
+      )
+    );
+  };
+
   const startSession = () => {
     setSessionStartTime(new Date());
   };
 
   const endSession = () => {
+    // Move any stuck in-consultation tokens back to waiting so they appear next session
+    setTokens(prev =>
+      prev.map(t => t.status === 'in-consultation' ? { ...t, status: 'waiting', calledAt: undefined } : t)
+    );
     setSessionStartTime(null);
     setCurrentToken(null);
   };
@@ -390,6 +401,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         startSession,
         endSession,
         callNextToken,
+        callToken,
         addPrescription,
         dispensePrescription,
         settleBilling,

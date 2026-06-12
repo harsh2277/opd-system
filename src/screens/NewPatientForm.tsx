@@ -4,7 +4,7 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { User, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { User, ArrowLeft, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { mockPatients } from '../data/mockPatients';
@@ -66,17 +66,31 @@ export function NewPatientForm() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Progress Bar */}
+      {/* Progress Indicator */}
       <div className="text-center mb-6">
-        <div className="flex justify-center items-end gap-6 mb-3">
+        <div className="flex justify-center items-center gap-2 mb-4">
           {[
-            { label: 'Patient Type', active: true },
-            { label: 'Details', active: true },
-            { label: 'Doctor', active: false },
-          ].map((step) => (
-            <div key={step.label} className="flex flex-col items-center gap-1.5">
-              <div className={`w-16 h-2 rounded-full ${step.active ? 'bg-[var(--brand-500)]' : 'bg-[var(--neutral-200)]'}`} />
-              <span className={`text-[10px] font-medium ${step.active ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+            { label: 'Patient Type', num: 1, state: 'done' as const, onClick: () => navigate('/patient-type') },
+            { label: 'Details', num: 2, state: 'active' as const, onClick: undefined },
+            { label: 'Doctor', num: 3, state: 'upcoming' as const, onClick: undefined },
+          ].map((step, i) => (
+            <div key={step.label} className="flex items-center gap-2">
+              {i > 0 && <div className="w-10 h-px bg-[var(--neutral-200)]" />}
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={step.onClick}
+                  disabled={!step.onClick}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all ${
+                    step.state === 'done' ? 'bg-[var(--brand-500)] border-[var(--brand-500)] text-white cursor-pointer hover:bg-[var(--brand-700)]' :
+                    step.state === 'active' ? 'bg-white border-[var(--brand-500)] text-[var(--brand-700)] cursor-default' :
+                    'bg-white border-[var(--neutral-300)] text-[var(--neutral-400)] cursor-default'
+                  }`}
+                >
+                  {step.state === 'done' ? <Check size={14} /> : step.num}
+                </button>
+                <span className={`text-[10px] font-medium whitespace-nowrap ${step.state !== 'upcoming' ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+              </div>
             </div>
           ))}
         </div>

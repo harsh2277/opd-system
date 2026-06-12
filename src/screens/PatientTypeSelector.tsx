@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
-import { UserPlus, UserCheck, ArrowLeft } from 'lucide-react';
+import { UserPlus, UserCheck, ArrowLeft, Check } from 'lucide-react';
 
 export function PatientTypeSelector() {
   const navigate = useNavigate();
@@ -30,15 +30,24 @@ export function PatientTypeSelector() {
     <div className="max-w-4xl mx-auto">
       {/* Progress Indicator */}
       <div className="text-center mb-8">
-        <div className="flex justify-center items-end gap-6 mb-3">
+        <div className="flex justify-center items-center gap-2 mb-4">
           {[
-            { label: 'Patient Type', active: true },
-            { label: 'Details', active: false },
-            { label: 'Doctor', active: false },
-          ].map((step) => (
-            <div key={step.label} className="flex flex-col items-center gap-1.5">
-              <div className={`w-16 h-2 rounded-full ${step.active ? 'bg-[var(--brand-500)]' : 'bg-[var(--neutral-200)]'}`} />
-              <span className={`text-[10px] font-medium ${step.active ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+            { label: 'Patient Type', num: 1, state: 'active' as const },
+            { label: 'Details', num: 2, state: 'upcoming' as const },
+            { label: 'Doctor', num: 3, state: 'upcoming' as const },
+          ].map((step, i) => (
+            <div key={step.label} className="flex items-center gap-2">
+              {i > 0 && <div className="w-10 h-px bg-[var(--neutral-200)]" />}
+              <div className="flex flex-col items-center gap-1">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all ${
+                  step.state === 'done' ? 'bg-[var(--brand-500)] border-[var(--brand-500)] text-white' :
+                  step.state === 'active' ? 'bg-white border-[var(--brand-500)] text-[var(--brand-700)]' :
+                  'bg-white border-[var(--neutral-300)] text-[var(--neutral-400)]'
+                }`}>
+                  {step.state === 'done' ? <Check size={14} /> : step.num}
+                </div>
+                <span className={`text-[10px] font-medium whitespace-nowrap ${step.state !== 'upcoming' ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+              </div>
             </div>
           ))}
         </div>

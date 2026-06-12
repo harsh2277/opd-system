@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
-import { Stethoscope, Users, Clock, Check } from 'lucide-react';
+import { Stethoscope, Users, Clock, Check, ChevronDown } from 'lucide-react';
+import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { generateTokenNumber } from '../utils/tokenCounter';
 
@@ -14,6 +15,17 @@ export function DoctorSelection() {
   const { doctors } = useApp();
   const [selectedDoctor, setSelectedDoctor] = useState<typeof doctors[0] | null>(null);
   const [specialtyFilter, setSpecialtyFilter] = useState<string>('All');
+  const [showOffDuty, setShowOffDuty] = useState(false);
+
+  // Guard: if we arrive here without patient data, send back to start
+  useEffect(() => {
+    if (!patient) {
+      toast.error('Patient details missing. Please start again.');
+      navigate('/patient-type');
+    }
+  }, [patient, navigate]);
+
+  if (!patient) return null;
 
   const handleIssueToken = () => {
     if (selectedDoctor) {
@@ -32,17 +44,31 @@ export function DoctorSelection() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Progress Bar */}
+      {/* Progress Indicator */}
       <div className="text-center mb-6">
-        <div className="flex justify-center items-end gap-6 mb-3">
+        <div className="flex justify-center items-center gap-2 mb-4">
           {[
-            { label: 'Patient Type', active: true },
-            { label: 'Details', active: true },
-            { label: 'Doctor', active: true },
-          ].map((step) => (
-            <div key={step.label} className="flex flex-col items-center gap-1.5">
-              <div className="w-16 h-2 rounded-full bg-[var(--brand-500)]" />
-              <span className="text-[10px] font-medium text-[var(--brand-600)]">{step.label}</span>
+            { label: 'Patient Type', num: 1, state: 'done' as const, onClick: () => navigate('/patient-type') },
+            { label: 'Details', num: 2, state: 'done' as const, onClick: () => navigate(-1) },
+            { label: 'Doctor', num: 3, state: 'active' as const, onClick: undefined },
+          ].map((step, i) => (
+            <div key={step.label} className="flex items-center gap-2">
+              {i > 0 && <div className="w-10 h-px bg-[var(--brand-200)]" />}
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={step.onClick}
+                  disabled={!step.onClick}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all ${
+                    step.state === 'done' ? 'bg-[var(--brand-500)] border-[var(--brand-500)] text-white cursor-pointer hover:bg-[var(--brand-700)]' :
+                    step.state === 'active' ? 'bg-white border-[var(--brand-500)] text-[var(--brand-700)] cursor-default' :
+                    'bg-white border-[var(--neutral-300)] text-[var(--neutral-400)] cursor-default'
+                  }`}
+                >
+                  {step.state === 'done' ? <Check size={14} /> : step.num}
+                </button>
+                <span className={`text-[10px] font-medium whitespace-nowrap ${step.state !== 'upcoming' ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -92,12 +118,15 @@ export function DoctorSelection() {
         </div>
       </div>
 
-      {/* Doctor Grid */}
-      <div className="grid grid-cols-3 gap-5 mb-6">
-        {doctors.filter((d) => specialtyFilter === 'All' || d.specialty === specialtyFilter).map((doctor) => {
+      {/* Doctor Grid — on-duty only */}
+      {(() => {
+        const filtered = doctors.filter((d) => specialtyFilter === 'All' || d.specialty === specialtyFilter);
+        const onDuty = filtered.filter(d => d.status !== 'off-duty');
+        const offDuty = filtered.filter(d => d.status === 'off-duty');
+
+        const DoctorCard = ({ doctor }: { doctor: typeof doctors[0] }) => {
           const isSelected = selectedDoctor?.id === doctor.id;
           const isOffDuty = doctor.status === 'off-duty';
-
           return (
             <Card
               key={doctor.id}
@@ -113,7 +142,7 @@ export function DoctorSelection() {
                 </div>
                 <div className="flex gap-2">
                   <Badge variant={doctor.status as 'on-duty' | 'off-duty'}>
-                    {doctor.status === 'on-duty' ? 'ON DUTY' : 'OFF DUTY'}
+                    {doctor.status === 'on-duty' ? 'ON DUTY' : doctor.status === 'break' ? 'ON BREAK' : doctor.status === 'lunch' ? 'LUNCH' : 'OFF DUTY'}
                   </Badge>
                   {isSelected && (
                     <div className="w-5 h-5 rounded-full bg-[var(--brand-500)] flex items-center justify-center">
@@ -122,14 +151,10 @@ export function DoctorSelection() {
                   )}
                 </div>
               </div>
-
               <h3 className="font-heading text-lg font-bold text-[var(--neutral-900)] mb-1">{doctor.name}</h3>
               <p className="text-sm text-[var(--neutral-600)]">{doctor.specialty}</p>
-              {isOffDuty && (
-                <p className="text-xs text-[var(--neutral-400)] mt-0.5 mb-4">Not available today</p>
-              )}
+              {isOffDuty && <p className="text-xs text-[var(--neutral-400)] mt-0.5 mb-4">Not available today</p>}
               {!isOffDuty && <div className="mb-4" />}
-
               <div className="pt-4 border-t border-[var(--neutral-200)] space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   <Users size={16} className="text-[var(--neutral-500)]" />
@@ -146,8 +171,33 @@ export function DoctorSelection() {
               </div>
             </Card>
           );
-        })}
-      </div>
+        };
+
+        return (
+          <>
+            <div className="grid grid-cols-3 gap-5 mb-4">
+              {onDuty.map(d => <DoctorCard key={d.id} doctor={d} />)}
+            </div>
+            {offDuty.length > 0 && (
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={() => setShowOffDuty(v => !v)}
+                  className="flex items-center gap-2 text-xs text-[var(--neutral-500)] hover:text-[var(--neutral-700)] mb-3 transition-colors"
+                >
+                  <ChevronDown size={14} className={`transition-transform ${showOffDuty ? 'rotate-180' : ''}`} />
+                  {offDuty.length} doctor{offDuty.length > 1 ? 's' : ''} unavailable today
+                </button>
+                {showOffDuty && (
+                  <div className="grid grid-cols-3 gap-5">
+                    {offDuty.map(d => <DoctorCard key={d.id} doctor={d} />)}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Footer Action Bar */}
       {selectedDoctor && (

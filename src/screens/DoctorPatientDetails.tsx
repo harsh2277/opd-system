@@ -20,6 +20,16 @@ import {
   LogOut,
   FlaskConical,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 import { getPatientHistory } from '../data/dummyPatientHistory';
@@ -190,6 +200,7 @@ export function DoctorPatientDetails() {
   const [newLabTest, setNewLabTest] = useState('');
   const [labNotes, setLabNotes] = useState('');
   const [labSent, setLabSent] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
   const handleUpdateStatus = (status: 'on-duty' | 'off-duty' | 'break' | 'lunch') => {
     if (currentDoctor) {
@@ -203,7 +214,11 @@ export function DoctorPatientDetails() {
 
   useEffect(() => {
     const doc = localStorage.getItem('current-doctor');
-    if (doc) setCurrentDoctor(JSON.parse(doc));
+    let parsedDoctor = null;
+    if (doc) {
+      parsedDoctor = JSON.parse(doc);
+      setCurrentDoctor(parsedDoctor);
+    }
 
     const found = tokens.find((t) => t.id === tokenId);
     if (!found) {
@@ -211,6 +226,14 @@ export function DoctorPatientDetails() {
       navigate('/doctor-dashboard');
       return;
     }
+
+    // Ownership guard: prevent doctors from accessing other doctors' patients
+    if (parsedDoctor && found.doctor.id !== parsedDoctor.id) {
+      toast.error('This patient is not assigned to you');
+      navigate('/doctor-dashboard');
+      return;
+    }
+
     setToken(found);
     setLabTests((found.labTests || []).map((test: { name: string }) => test.name));
     setLabNotes((found.labTests || [])[0]?.notes || '');
@@ -329,23 +352,31 @@ export function DoctorPatientDetails() {
     }
   };
 
+  const hasUnsavedWork = medicines.length > 0 || note.diagnosis.trim() !== '';
+
   const handleComplete = () => {
-    if (note.diagnosis) {
+    if (note.diagnosis.trim()) {
       handleSaveAndComplete();
+    } else if (medicines.length > 0) {
+      // Medicines added but no diagnosis — warn before discarding
+      setShowUnsavedDialog(true);
     } else {
-      updateTokenStatus(token.token, 'done');
-      toast.success('Consultation completed');
-      
-      const nextToken = tokens.find(
-        (t) => t.doctor.id === currentDoctor?.id && t.status === 'waiting' && t.id !== token.id
-      );
-      if (nextToken) {
-        updateTokenStatus(nextToken.token, 'in-consultation');
-        navigate(`/doctor-patient/${nextToken.id}`);
-        toast.info(`Next patient called: ${nextToken.patient.name}`);
-      } else {
-        navigate('/doctor-dashboard');
-      }
+      doCompleteWithoutSaving();
+    }
+  };
+
+  const doCompleteWithoutSaving = () => {
+    updateTokenStatus(token.token, 'done');
+    toast.success('Consultation completed');
+    const nextToken = tokens.find(
+      (t) => t.doctor.id === currentDoctor?.id && t.status === 'waiting' && t.id !== token.id
+    );
+    if (nextToken) {
+      updateTokenStatus(nextToken.token, 'in-consultation');
+      navigate(`/doctor-patient/${nextToken.id}`);
+      toast.info(`Next patient called: ${nextToken.patient.name}`);
+    } else {
+      navigate('/doctor-dashboard');
     }
   };
 
@@ -362,6 +393,28 @@ export function DoctorPatientDetails() {
 
   return (
     <div className="flex h-screen bg-[var(--neutral-50)] font-sans">
+      {/* Unsaved changes guard dialog */}
+      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Medicines</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {medicines.length} medicine(s) added but no diagnosis saved. If you complete now, these medicines will be discarded and <strong>not sent to pharmacy</strong>. Do you want to add a diagnosis first?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowUnsavedDialog(false)}>
+              Go Back &amp; Add Diagnosis
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setShowUnsavedDialog(false); doCompleteWithoutSaving(); }}
+              className="bg-[var(--error-500)] hover:bg-[var(--error-700)] text-white"
+            >
+              Discard &amp; Complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Sidebar — same as dashboard */}
       <aside className="w-56 bg-white border-r border-[var(--neutral-200)] flex flex-col flex-shrink-0">
         <div className="h-14 flex items-center px-5 border-b border-[var(--neutral-200)] flex-shrink-0">
