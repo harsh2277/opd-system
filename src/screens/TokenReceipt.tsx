@@ -14,6 +14,7 @@ export function TokenReceipt() {
   const { patient, doctor, isNew } = location.state || {};
   const { addToken, tokens, sendSMS } = useApp();
   const [hasAddedToken, setHasAddedToken] = useState(false);
+  const [isIssuing, setIsIssuing] = useState(false);
   const [isIssued, setIsIssued] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'card'>('upi');
@@ -22,12 +23,12 @@ export function TokenReceipt() {
 
   const fee = isNew ? 500 : 300;
 
-  const handleIssueToken = (payNow: boolean) => {
-    if (patient && doctor && !hasAddedToken) {
+  const handleIssueToken = async (payNow: boolean) => {
+    if (patient && doctor && !hasAddedToken && !isIssuing) {
+      setIsIssuing(true);
       // Generate exactly once, right here at issuance time
       const newToken = generateTokenNumber();
-      setIssuedToken(newToken);
-      addToken({
+      const saved = await addToken({
         id: `token-${Date.now()}-${Math.random()}`,
         token: newToken,
         patient,
@@ -41,6 +42,12 @@ export function TokenReceipt() {
         consultationPaid: payNow,
         paymentMethod: payNow ? paymentMode : undefined,
       });
+      setIsIssuing(false);
+      if (!saved) {
+        toast.error('Check-in failed — token could not be saved. Please try again.');
+        return;
+      }
+      setIssuedToken(newToken);
       setHasAddedToken(true);
       setIsPaid(payNow);
       setIsIssued(true);
@@ -168,14 +175,16 @@ export function TokenReceipt() {
                 <div className="flex flex-col gap-2 pt-2">
                   <Button
                     onClick={() => handleIssueToken(true)}
+                    disabled={isIssuing}
                     className="w-full text-xs h-10 font-bold"
                   >
-                    Pay ₹{fee} & Issue Token
+                    {isIssuing ? 'Issuing…' : `Pay ₹${fee} & Issue Token`}
                   </Button>
                   <button
                     type="button"
                     onClick={() => handleIssueToken(false)}
-                    className="w-full text-xs h-9 font-medium border border-[var(--neutral-200)] rounded-md text-[var(--neutral-600)] hover:bg-[var(--neutral-50)] transition-colors"
+                    disabled={isIssuing}
+                    className="w-full text-xs h-9 font-medium border border-[var(--neutral-200)] rounded-md text-[var(--neutral-600)] hover:bg-[var(--neutral-50)] transition-colors disabled:opacity-50"
                   >
                     Issue Token — Pay Later
                   </button>

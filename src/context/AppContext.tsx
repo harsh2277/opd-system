@@ -100,7 +100,7 @@ interface AppContextType {
   notifications: Notification[];
   prescriptionTemplates: PrescriptionTemplate[];
   appointments: Appointment[];
-  addToken: (token: Token) => void;
+  addToken: (token: Token) => Promise<boolean>;
   addDoctor: (doctor: Doctor) => void;
   updateTokenStatus: (tokenNumber: string, status: Token['status']) => void;
   updateDoctorStatus: (doctorId: string, status: Doctor['status']) => void;
@@ -139,62 +139,131 @@ const initialDoctors: Doctor[] = [
 ];
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  // Load from localStorage on mount
-  const [tokens, setTokens] = useState<Token[]>(() => {
-    const saved = localStorage.getItem('opd-tokens');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [doctors, setDoctors] = useState<Doctor[]>(() => {
-    const saved = localStorage.getItem('opd-doctors');
-    return saved ? JSON.parse(saved) : initialDoctors;
-  });
-
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>(initialDoctors);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(() => {
     const saved = localStorage.getItem('opd-session-start');
     return saved ? new Date(saved) : null;
   });
-
   const [currentToken, setCurrentToken] = useState<string | null>(() => {
     return localStorage.getItem('opd-current-token');
   });
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [prescriptionTemplates, setPrescriptionTemplates] = useState<PrescriptionTemplate[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    const saved = localStorage.getItem('opd-notifications');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [prescriptionTemplates, setPrescriptionTemplates] = useState<PrescriptionTemplate[]>(() => {
-    const saved = localStorage.getItem('opd-rx-templates');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [appointments, setAppointments] = useState<Appointment[]>(() => {
-    const saved = localStorage.getItem('opd-appointments');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Save to localStorage whenever state changes
+  // Load from backend APIs on mount
   useEffect(() => {
-    localStorage.setItem('opd-tokens', JSON.stringify(tokens));
-  }, [tokens]);
+    const loadData = async () => {
+      try {
+        const fetchJSON = async (url: string) => {
+          const res = await fetch(url);
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || err.message || `HTTP ${res.status}`);
+          }
+          return res.json();
+        };
 
-  useEffect(() => {
-    localStorage.setItem('opd-doctors', JSON.stringify(doctors));
-  }, [doctors]);
+        let tokensRes: any[] = [];
+        let doctorsRes: any[] = [];
+        let apptsRes: any[] = [];
+        let templatesRes: any[] = [];
+        let notifsRes: any[] = [];
 
-  useEffect(() => {
-    localStorage.setItem('opd-notifications', JSON.stringify(notifications));
-  }, [notifications]);
+        try { tokensRes = await fetchJSON('/api/tokens'); } catch(e) { console.error('Error loading tokens:', e); }
+        try { doctorsRes = await fetchJSON('/api/doctors'); } catch(e) { console.error('Error loading doctors:', e); }
+        try { apptsRes = await fetchJSON('/api/appointments'); } catch(e) { console.error('Error loading appointments:', e); }
+        try { templatesRes = await fetchJSON('/api/templates'); } catch(e) { console.error('Error loading templates:', e); }
+        try { notifsRes = await fetchJSON('/api/notifications'); } catch(e) { console.error('Error loading notifications:', e); }
+        
+        const mappedDoctors = (doctorsRes && Array.isArray(doctorsRes) ? doctorsRes : []).map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          specialty: d.specialty,
+          status: d.status,
+          queue: 0,
+          avgWait: 15
+        }));
 
-  useEffect(() => {
-    localStorage.setItem('opd-rx-templates', JSON.stringify(prescriptionTemplates));
-  }, [prescriptionTemplates]);
+        const safeParse = (val: any) => {
+          if (!val) return null;
+          if (typeof val === 'object') return val;
+          try {
+            return JSON.parse(val);
+          } catch (e) {
+            console.error('Failed to parse JSON field:', val, e);
+            return null;
+          }
+        };
 
-  useEffect(() => {
-    localStorage.setItem('opd-appointments', JSON.stringify(appointments));
-  }, [appointments]);
+        const mappedTokens = (tokensRes && Array.isArray(tokensRes) ? tokensRes : []).map((t: any) => ({
+          id: t.id,
+          token: t.token_number,
+          patient: {
+            id: t.patient_id,
+            name: t.patient_name,
+            age: t.patient_age,
+            gender: t.patient_gender,
+            mobile: t.patient_mobile,
+            bloodGroup: t.patient_blood_group,
+            selectedConditions: t.patient_selected_conditions || [],
+            address: t.patient_address
+          },
+          doctor: mappedDoctors.find((d: any) => d.id === t.doctor_id) || { id: t.doctor_id, name: 'Doctor', specialty: '', queue: 0, avgWait: 15, status: 'on-duty' },
+          issuedAt: t.issued_at,
+          status: t.status,
+          calledAt: t.called_at,
+          smsSentAt: t.sms_sent_at,
+          urgent: t.urgent,
+          prescription: safeParse(t.prescription),
+          prescriptionStatus: t.prescription_status,
+          billingStatus: t.billing_status,
+          billingAmount: Number(t.billing_amount),
+          vitals: safeParse(t.vitals),
+          pharmacySentAt: t.pharmacy_sent_at,
+          labTests: safeParse(t.lab_tests),
+          labStatus: t.lab_status,
+          labRequestedAt: t.lab_requested_at,
+          labCompletedAt: t.lab_completed_at,
+          labReportNotes: t.lab_report_notes,
+          isNewPatient: t.is_new_patient,
+          consultationPaid: t.consultation_paid,
+          prescriptionPaid: t.prescription_paid,
+          labPaid: t.lab_paid,
+          paymentMethod: t.payment_method
+        }));
 
+        setDoctors(mappedDoctors.length > 0 ? mappedDoctors : initialDoctors);
+        setTokens(mappedTokens);
+        setAppointments((apptsRes && Array.isArray(apptsRes) ? apptsRes : []).map((a: any) => ({
+          id: a.id,
+          patientName: a.patient_name,
+          patientMobile: a.patient_mobile,
+          patientAge: a.patient_age,
+          patientGender: a.patient_gender,
+          doctorId: a.doctor_id,
+          doctorName: a.doctor_name,
+          date: a.date,
+          time: a.time,
+          notes: a.notes,
+          status: a.status,
+          createdAt: a.created_at
+        })));
+        setPrescriptionTemplates((templatesRes && Array.isArray(templatesRes) ? templatesRes : []).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          medicines: typeof t.medicines === 'string' ? JSON.parse(t.medicines) : t.medicines
+        })));
+        setNotifications(notifsRes && Array.isArray(notifsRes) ? notifsRes : []);
+      } catch (err) {
+        console.error('Failed to fetch initial state from Neon backend:', err);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Save session states to localStorage
   useEffect(() => {
     if (sessionStartTime) {
       localStorage.setItem('opd-session-start', sessionStartTime.toISOString());
@@ -211,115 +280,172 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [currentToken]);
 
-  // Listen for storage changes from other windows
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'opd-tokens' && e.newValue) {
-        setTokens(JSON.parse(e.newValue));
-      } else if (e.key === 'opd-doctors' && e.newValue) {
-        setDoctors(JSON.parse(e.newValue));
-      } else if (e.key === 'opd-notifications' && e.newValue) {
-        setNotifications(JSON.parse(e.newValue));
-      } else if (e.key === 'opd-current-token') {
-        setCurrentToken(e.newValue);
-      } else if (e.key === 'opd-session-start' && e.newValue) {
-        setSessionStartTime(new Date(e.newValue));
-      } else if (e.key === 'opd-session-start' && !e.newValue) {
-        setSessionStartTime(null);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Update doctor queue counts reactively from live tokens (functional update avoids stale closure)
+  // Update doctor queue counts reactively from live tokens
   useEffect(() => {
     setDoctors(prev => prev.map(doctor => ({
       ...doctor,
-      queue: tokens.filter(t => t.doctor.id === doctor.id && t.status === 'waiting').length,
+      queue: tokens.filter(t => t.doctor?.id === doctor.id && t.status === 'waiting').length,
     })));
   }, [tokens]);
 
-  const addToken = (token: Token) => {
-    setTokens((prev) => [...prev, token]);
-    const label = token.isNewPatient ? 'New patient' : 'Returning patient';
-    setNotifications((prev) => [
-      {
-        id: `${Date.now()}-${Math.random()}`,
-        text: `${label} ${token.patient.name} checked in — ${token.token} for ${token.doctor.name}`,
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        type: 'info' as const,
-        unread: true,
-      },
-      ...prev,
-    ]);
+  const addToken = async (token: Token): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(token)
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        console.error('Failed to save token:', err.message || err.error || `HTTP ${response.status}`);
+        return false;
+      }
+      const savedToken = await response.json();
+      const label = token.isNewPatient ? 'New patient' : 'Returning patient';
+      const notifText = `${label} ${token.patient.name} checked in — ${token.token} for ${token.doctor?.name || 'Doctor'}`;
+      await addNotification(notifText, 'info');
+      setTokens((prev) => [...prev, {
+        ...token,
+        issuedAt: savedToken.issued_at
+      }]);
+      return true;
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
   };
 
   const addDoctor = (doctor: Doctor) => {
     setDoctors((prev) => [...prev, doctor]);
   };
 
-  const updateTokenStatus = (tokenNumber: string, status: Token['status']) => {
-    setTokens((prev) =>
-      prev.map((token) =>
-        token.token === tokenNumber ? { ...token, status } : token
-      )
-    );
-    if (status === 'in-consultation') {
-      setCurrentToken(tokenNumber);
+  const updateTokenStatus = async (tokenNumber: string, status: Token['status']) => {
+    const calledAt = status === 'in-consultation' ? new Date().toISOString() : undefined;
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, calledAt })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((token) =>
+            token.token === tokenNumber ? { ...token, status, calledAt: status === 'in-consultation' ? calledAt : token.calledAt } : token
+          )
+        );
+        if (status === 'in-consultation') {
+          setCurrentToken(tokenNumber);
+        }
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const updateDoctorStatus = (doctorId: string, status: Doctor['status']) => {
-    setDoctors((prev) =>
-      prev.map((doc) =>
-        doc.id === doctorId ? { ...doc, status } : doc
-      )
-    );
+  const updateDoctorStatus = async (doctorId: string, status: Doctor['status']) => {
+    try {
+      const response = await fetch(`/api/doctors/${doctorId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (response.ok) {
+        setDoctors((prev) =>
+          prev.map((doc) =>
+            doc.id === doctorId ? { ...doc, status } : doc
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const markTokenUrgent = (tokenNumber: string) => {
-    setTokens((prev) =>
-      prev.map((token) =>
-        token.token === tokenNumber ? { ...token, urgent: true } : token
-      )
-    );
+  const markTokenUrgent = async (tokenNumber: string) => {
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urgent: true })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((token) =>
+            token.token === tokenNumber ? { ...token, urgent: true } : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const addPrescription = (tokenNumber: string, medicines: Medicine[]) => {
-    setTokens((prev) =>
-      prev.map((token) =>
-        token.token === tokenNumber
-          ? {
-              ...token,
-              prescription: medicines,
-              prescriptionStatus: 'pending',
-              billingStatus: 'pending',
-              billingAmount: medicines.reduce((acc, m) => acc + 150, 0), // Base estimate
-            }
-          : token
-      )
-    );
+  const addPrescription = async (tokenNumber: string, medicines: Medicine[]) => {
+    const billingAmount = medicines.reduce((acc, m) => acc + 150, 0);
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prescription: medicines,
+          prescriptionStatus: 'pending',
+          billingStatus: 'pending',
+          billingAmount
+        })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((token) =>
+            token.token === tokenNumber
+              ? {
+                  ...token,
+                  prescription: medicines,
+                  prescriptionStatus: 'pending',
+                  billingStatus: 'pending',
+                  billingAmount,
+                }
+              : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const dispensePrescription = (tokenNumber: string, updatedMedicines: Medicine[], amount: number) => {
-    setTokens((prev) =>
-      prev.map((token) =>
-        token.token === tokenNumber
-          ? {
-              ...token,
-              prescription: updatedMedicines,
-              prescriptionStatus: 'dispensed',
-              billingStatus: 'paid',
-              billingAmount: amount,
-            }
-          : token
-      )
-    );
+  const dispensePrescription = async (tokenNumber: string, updatedMedicines: Medicine[], amount: number) => {
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prescription: updatedMedicines,
+          prescriptionStatus: 'dispensed',
+          billingStatus: 'paid',
+          billingAmount: amount
+        })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((token) =>
+            token.token === tokenNumber
+              ? {
+                  ...token,
+                  prescription: updatedMedicines,
+                  prescriptionStatus: 'dispensed',
+                  billingStatus: 'paid',
+                  billingAmount: amount,
+                }
+              : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const settleBilling = (
+  const settleBilling = async (
     tokenNumber: string,
     consultationPaid: boolean,
     prescriptionPaid: boolean,
@@ -327,173 +453,350 @@ export function AppProvider({ children }: { children: ReactNode }) {
     amount: number,
     paymentMethod?: 'upi' | 'cash' | 'card'
   ) => {
-    setTokens((prev) =>
-      prev.map((token) =>
-        token.token === tokenNumber
-          ? {
-              ...token,
-              consultationPaid,
-              prescriptionPaid,
-              labPaid,
-              prescriptionStatus: prescriptionPaid ? 'dispensed' : token.prescriptionStatus,
-              billingStatus: (consultationPaid && (!token.prescription || token.prescription.length === 0 || prescriptionPaid) && (!token.labTests || token.labTests.length === 0 || labPaid)) ? 'paid' : 'pending',
-              billingAmount: amount,
-              paymentMethod: paymentMethod || token.paymentMethod,
-            }
-          : token
-      )
-    );
-  };
+    const token = tokens.find(t => t.token === tokenNumber);
+    if (!token) return;
 
-  const requestLabTests = (tokenNumber: string, tests: LabTestRequest[]) => {
-    setTokens((prev) =>
-      prev.map((token) =>
-        token.token === tokenNumber
-          ? {
-              ...token,
-              labTests: tests,
-              labStatus: 'pending',
-              labRequestedAt: token.labRequestedAt || new Date().toISOString(),
-              labCompletedAt: undefined,
-              labReportNotes: undefined,
-            }
-          : token
-      )
-    );
-  };
+    const prescriptionStatus = prescriptionPaid ? 'dispensed' : token.prescriptionStatus;
+    const isPaid = (consultationPaid && (!token.prescription || token.prescription.length === 0 || prescriptionPaid) && (!token.labTests || token.labTests.length === 0 || labPaid));
+    const billingStatus = isPaid ? 'paid' : 'pending';
 
-  const completeLabRequest = (tokenNumber: string, reportNotes: string) => {
-    setTokens((prev) =>
-      prev.map((token) =>
-        token.token === tokenNumber
-          ? {
-              ...token,
-              labStatus: 'completed',
-              labCompletedAt: new Date().toISOString(),
-              labReportNotes: reportNotes,
-              // Mark all tests as completed when bulk-completing
-              labTests: (token.labTests || []).map(t => ({
-                ...t,
-                status: 'completed' as const,
-                completedAt: new Date().toISOString(),
-              })),
-            }
-          : token
-      )
-    );
-  };
-
-  const updateLabTest = (tokenNumber: string, testName: string) => {
-    setTokens((prev) =>
-      prev.map((token) => {
-        if (token.token !== tokenNumber) return token;
-        const now = new Date().toISOString();
-        const updatedTests = (token.labTests || []).map(t =>
-          t.name === testName ? { ...t, status: 'completed' as const, completedAt: now } : t
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultationPaid,
+          prescriptionPaid,
+          labPaid,
+          prescriptionStatus,
+          billingStatus,
+          billingAmount: amount,
+          paymentMethod
+        })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((token) =>
+            token.token === tokenNumber
+              ? {
+                  ...token,
+                  consultationPaid,
+                  prescriptionPaid,
+                  labPaid,
+                  prescriptionStatus,
+                  billingStatus,
+                  billingAmount: amount,
+                  paymentMethod: paymentMethod || token.paymentMethod,
+                }
+              : token
+          )
         );
-        const allDone = updatedTests.every(t => t.status === 'completed');
-        return {
-          ...token,
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const requestLabTests = async (tokenNumber: string, tests: LabTestRequest[]) => {
+    const labRequestedAt = new Date().toISOString();
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          labTests: tests,
+          labStatus: 'pending',
+          labRequestedAt
+        })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((token) =>
+            token.token === tokenNumber
+              ? {
+                  ...token,
+                  labTests: tests,
+                  labStatus: 'pending',
+                  labRequestedAt: token.labRequestedAt || labRequestedAt,
+                  labCompletedAt: undefined,
+                  labReportNotes: undefined,
+                }
+              : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const completeLabRequest = async (tokenNumber: string, reportNotes: string) => {
+    const token = tokens.find(t => t.token === tokenNumber);
+    if (!token) return;
+    const completedAt = new Date().toISOString();
+    const labTests = (token.labTests || []).map(t => ({
+      ...t,
+      status: 'completed' as const,
+      completedAt,
+    }));
+
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          labStatus: 'completed',
+          labCompletedAt: completedAt,
+          labReportNotes: reportNotes,
+          labTests
+        })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((token) =>
+            token.token === tokenNumber
+              ? {
+                  ...token,
+                  labStatus: 'completed',
+                  labCompletedAt: completedAt,
+                  labReportNotes: reportNotes,
+                  labTests,
+                }
+              : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateLabTest = async (tokenNumber: string, testName: string) => {
+    const token = tokens.find(t => t.token === tokenNumber);
+    if (!token) return;
+    const now = new Date().toISOString();
+    const updatedTests = (token.labTests || []).map(t =>
+      t.name === testName ? { ...t, status: 'completed' as const, completedAt: now } : t
+    );
+    const allDone = updatedTests.every(t => t.status === 'completed');
+
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           labTests: updatedTests,
           labStatus: allDone ? 'completed' : 'pending',
           labCompletedAt: allDone ? now : undefined,
-        };
-      })
-    );
-  };
-
-  const addNotification = (text: string, type: Notification['type'] = 'info') => {
-    const newNotif: Notification = {
-      id: `${Date.now()}-${Math.random()}`,
-      text,
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      type,
-      unread: true,
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
-  };
-
-  const clearNotifications = () => {
-    setNotifications([]);
-  };
-
-  const markNotificationsAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
-  };
-
-  // Clean up old tokens without IDs on load
-  useEffect(() => {
-    const cleanTokens = tokens.map((token) => {
-      if (!token.id) {
-        return { ...token, id: `${token.token}-${Date.now()}-${Math.random()}` };
+        })
+      });
+      if (response.ok) {
+        setTokens((prev) =>
+          prev.map((t) => {
+            if (t.token !== tokenNumber) return t;
+            return {
+              ...t,
+              labTests: updatedTests,
+              labStatus: allDone ? 'completed' : 'pending',
+              labCompletedAt: allDone ? now : undefined,
+            };
+          })
+        );
       }
-      return token;
-    });
-    if (cleanTokens.some((t, i) => t.id !== tokens[i]?.id)) {
-      setTokens(cleanTokens);
+    } catch (err) {
+      console.error(err);
     }
-  }, []);
-
-  const callToken = (tokenNumber: string) => {
-    setTokens(prev =>
-      prev.map(token =>
-        token.token === tokenNumber
-          ? { ...token, calledAt: new Date().toISOString(), smsSentAt: new Date().toISOString() }
-          : token
-      )
-    );
   };
 
-  const sendSMS = (tokenNumber: string) => {
-    setTokens(prev =>
-      prev.map(token =>
-        token.token === tokenNumber ? { ...token, smsSentAt: new Date().toISOString() } : token
-      )
-    );
+  const addNotification = async (text: string, type: Notification['type'] = 'info') => {
+    try {
+      const response = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, type })
+      });
+      if (response.ok) {
+        const notif = await response.json();
+        setNotifications((prev) => [notif, ...prev]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const saveVitals = (tokenNumber: string, vitals: { bp: string; temp: string; pulse: string; weight: string }) => {
-    setTokens(prev =>
-      prev.map(token =>
-        token.token === tokenNumber ? { ...token, vitals } : token
-      )
-    );
+  const clearNotifications = async () => {
+    try {
+      const response = await fetch('/api/notifications', { method: 'DELETE' });
+      if (response.ok) {
+        setNotifications([]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const sendToPharmacy = (tokenNumber: string, medicines: Medicine[]) => {
-    setTokens(prev =>
-      prev.map(token =>
-        token.token === tokenNumber
-          ? { ...token, prescription: medicines, prescriptionStatus: 'pending', pharmacySentAt: new Date().toISOString() }
-          : token
-      )
-    );
+  const markNotificationsAsRead = async () => {
+    try {
+      const response = await fetch('/api/notifications/read', { method: 'POST' });
+      if (response.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const savePrescriptionTemplate = (name: string, medicines: Medicine[]) => {
-    const template: PrescriptionTemplate = {
-      id: `tpl-${Date.now()}`,
-      name,
-      medicines,
-    };
-    setPrescriptionTemplates(prev => [template, ...prev]);
+  const callToken = async (tokenNumber: string) => {
+    const calledAt = new Date().toISOString();
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calledAt, smsSentAt: calledAt })
+      });
+      if (response.ok) {
+        setTokens(prev =>
+          prev.map(token =>
+            token.token === tokenNumber
+              ? { ...token, calledAt, smsSentAt: calledAt }
+              : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const deletePrescriptionTemplate = (id: string) => {
-    setPrescriptionTemplates(prev => prev.filter(t => t.id !== id));
+  const sendSMS = async (tokenNumber: string) => {
+    const smsSentAt = new Date().toISOString();
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smsSentAt })
+      });
+      if (response.ok) {
+        setTokens(prev =>
+          prev.map(token =>
+            token.token === tokenNumber ? { ...token, smsSentAt } : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const addAppointment = (appt: Omit<Appointment, 'id' | 'createdAt'>) => {
-    const newAppt: Appointment = {
-      ...appt,
-      id: `appt-${Date.now()}-${Math.random()}`,
-      createdAt: new Date().toISOString(),
-    };
-    setAppointments(prev => [...prev, newAppt]);
+  const saveVitals = async (tokenNumber: string, vitals: { bp: string; temp: string; pulse: string; weight: string }) => {
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vitals })
+      });
+      if (response.ok) {
+        setTokens(prev =>
+          prev.map(token =>
+            token.token === tokenNumber ? { ...token, vitals } : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+  const sendToPharmacy = async (tokenNumber: string, medicines: Medicine[]) => {
+    const pharmacySentAt = new Date().toISOString();
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prescription: medicines,
+          prescriptionStatus: 'pending',
+          pharmacySentAt
+        })
+      });
+      if (response.ok) {
+        setTokens(prev =>
+          prev.map(token =>
+            token.token === tokenNumber
+              ? { ...token, prescription: medicines, prescriptionStatus: 'pending', pharmacySentAt }
+              : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const savePrescriptionTemplate = async (name: string, medicines: Medicine[]) => {
+    try {
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, medicines })
+      });
+      if (response.ok) {
+        const saved = await response.json();
+        setPrescriptionTemplates(prev => [{
+          id: saved.id,
+          name: saved.name,
+          medicines: typeof saved.medicines === 'string' ? JSON.parse(saved.medicines) : saved.medicines
+        }, ...prev]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deletePrescriptionTemplate = async (id: string) => {
+    try {
+      const response = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        setPrescriptionTemplates(prev => prev.filter(t => t.id !== id));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addAppointment = async (appt: Omit<Appointment, 'id' | 'createdAt'>) => {
+    try {
+      const response = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appt)
+      });
+      if (response.ok) {
+        const saved = await response.json();
+        setAppointments(prev => [...prev, {
+          ...appt,
+          id: saved.id,
+          createdAt: saved.created_at
+        }]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
+    try {
+      const response = await fetch(`/api/appointments/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (response.ok) {
+        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const startSession = () => {
@@ -501,7 +804,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const endSession = () => {
-    // Move any stuck in-consultation tokens back to waiting so they appear next session
     setTokens(prev =>
       prev.map(t => t.status === 'in-consultation' ? { ...t, status: 'waiting', calledAt: undefined } : t)
     );
@@ -511,7 +813,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const callNextToken = (doctorId: string) => {
     const nextToken = tokens.find(
-      (token) => token.doctor.id === doctorId && token.status === 'waiting'
+      (token) => token.doctor?.id === doctorId && token.status === 'waiting'
     );
     if (nextToken) {
       updateTokenStatus(nextToken.token, 'in-consultation');

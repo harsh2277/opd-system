@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -23,9 +23,31 @@ export function ReturningPatientSearch() {
   const navigate = useNavigate();
   const { tokens } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
+  const [dbPatients, setDbPatients] = useState<PatientRecord[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
 
-  // Build a deduplicated patient list: live session patients take priority over mock data
+  useEffect(() => {
+    fetch('/api/patients')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setDbPatients(data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            age: p.age,
+            gender: p.gender,
+            mobile: p.mobile,
+            bloodGroup: p.blood_group,
+            selectedConditions: p.selected_conditions || [],
+            address: p.address,
+            lastVisit: p.last_visit ? new Date(p.last_visit).toISOString().split('T')[0] : '—'
+          })));
+        }
+      })
+      .catch(err => console.error('Error loading patients from backend:', err));
+  }, []);
+
+  // Build a deduplicated patient list: live session patients take priority over database
   const livePatients: PatientRecord[] = Array.from(
     new Map(
       tokens.map((t) => [
@@ -46,9 +68,11 @@ export function ReturningPatientSearch() {
   );
 
   const liveMobiles = new Set(livePatients.map((p) => p.mobile));
+  const dbMobiles = new Set(dbPatients.map((p) => p.mobile));
   const mergedPatients: PatientRecord[] = [
     ...livePatients,
-    ...mockPatients.filter((p) => !liveMobiles.has(p.mobile)),
+    ...dbPatients.filter((p) => !liveMobiles.has(p.mobile)),
+    ...mockPatients.filter((p) => !liveMobiles.has(p.mobile) && !dbMobiles.has(p.mobile)),
   ];
 
   const filteredPatients = searchTerm.length === 0

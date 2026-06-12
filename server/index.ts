@@ -7,7 +7,7 @@ import { verifyPassword, generateToken, verifyToken } from './auth';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -148,9 +148,15 @@ app.post('/api/patients', async (req, res) => {
   const { id, name, age, gender, mobile, bloodGroup, selectedConditions, address } = req.body;
   const patientId = id || `PAT-${Date.now()}`;
   try {
+    const formatPgArray = (arr: string[]) => {
+      if (!arr || !Array.isArray(arr)) return '{}';
+      return `{${arr.map(v => v.replace(/["\\',{}]/g, '')).join(',')}}`;
+    };
+    const pConditions = formatPgArray(selectedConditions);
+
     const result = await sql`
       INSERT INTO patients (id, name, age, gender, mobile, blood_group, selected_conditions, address, last_visit)
-      VALUES (${patientId}, ${name}, ${age}, ${gender}, ${mobile}, ${bloodGroup}, ${selectedConditions || []}, ${address || null}, NOW())
+      VALUES (${patientId}, ${name}, ${age}, ${gender}, ${mobile}, ${bloodGroup}, ${pConditions}, ${address || null}, NOW())
       ON CONFLICT (id) DO UPDATE 
       SET name = EXCLUDED.name, age = EXCLUDED.age, gender = EXCLUDED.gender, mobile = EXCLUDED.mobile, blood_group = EXCLUDED.blood_group, last_visit = NOW()
       RETURNING *
@@ -224,20 +230,37 @@ app.get('/api/tokens', async (req, res) => {
 
 app.post('/api/tokens', async (req, res) => {
   const {
-    id, tokenNumber, patient, doctor, urgent, vitals, isNewPatient
+    id, token, tokenNumber, patient, doctor, urgent, vitals, isNewPatient,
+    billingStatus, billingAmount, consultationPaid, paymentMethod
   } = req.body;
 
+  const actualTokenNumber = tokenNumber || token;
   const tokenId = id || `TOK-${Date.now()}`;
 
   try {
+    // Helper to format JS array to standard PG array format e.g. '{val1,val2}'
+    const formatPgArray = (arr: string[]) => {
+      if (!arr || !Array.isArray(arr)) return '{}';
+      return `{${arr.map(v => v.replace(/["\\',{}]/g, '')).join(',')}}`;
+    };
+
     // 1. Ensure Patient exists or is upserted
-    let patientId = patient.id;
+    let patientId = patient?.id;
     if (!patientId) {
       patientId = `PAT-${Date.now()}`;
     }
+    
+    const pName = patient?.name || 'Unknown Patient';
+    const pAge = patient?.age || '0';
+    const pGender = patient?.gender || 'Other';
+    const pMobile = patient?.mobile || '';
+    const pBloodGroup = patient?.bloodGroup || 'Not Known';
+    const pConditions = formatPgArray(patient?.selectedConditions);
+    const pAddress = patient?.address || null;
+
     await sql`
       INSERT INTO patients (id, name, age, gender, mobile, blood_group, selected_conditions, address, last_visit)
-      VALUES (${patientId}, ${patient.name}, ${patient.age}, ${patient.gender}, ${patient.mobile}, ${patient.bloodGroup}, ${patient.selectedConditions || []}, ${patient.address || null}, NOW())
+      VALUES (${patientId}, ${pName}, ${pAge}, ${pGender}, ${pMobile}, ${pBloodGroup}, ${pConditions}, ${pAddress}, NOW())
       ON CONFLICT (id) DO UPDATE 
       SET last_visit = NOW();
     `;
@@ -246,18 +269,20 @@ app.post('/api/tokens', async (req, res) => {
     const result = await sql`
       INSERT INTO tokens (
         id, token_number, patient_id, patient_name, patient_age, patient_gender, patient_mobile, patient_blood_group, patient_selected_conditions, patient_address,
-        doctor_id, status, urgent, vitals, is_new_patient, issued_at
+        doctor_id, status, urgent, vitals, is_new_patient, issued_at,
+        billing_status, billing_amount, consultation_paid, payment_method
       )
       VALUES (
-        ${tokenId}, ${tokenNumber}, ${patientId}, ${patient.name}, ${patient.age}, ${patient.gender}, ${patient.mobile}, ${patient.bloodGroup}, ${patient.selectedConditions || []}, ${patient.address || null},
-        ${doctor.id}, 'waiting', ${urgent || false}, ${vitals ? JSON.stringify(vitals) : null}, ${isNewPatient || false}, NOW()
+        ${tokenId}, ${actualTokenNumber}, ${patientId}, ${pName}, ${pAge}, ${pGender}, ${pMobile}, ${pBloodGroup}, ${pConditions}, ${pAddress},
+        ${doctor?.id || null}, 'waiting', ${urgent || false}, ${vitals ? JSON.stringify(vitals) : null}, ${isNewPatient || false}, NOW(),
+        ${billingStatus || 'pending'}, ${billingAmount || 0}, ${consultationPaid || false}, ${paymentMethod || null}
       )
       RETURNING *
     `;
     res.status(201).json(result[0]);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Token create error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: 'Internal Server Error', message: error.message || String(error) });
   }
 });
 

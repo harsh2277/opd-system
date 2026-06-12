@@ -57,8 +57,11 @@ const initialPatients = [
   },
 ];
 
+import { useEffect } from 'react';
+import { toast } from 'sonner';
+
 export function PatientManagement() {
-  const [patientList, setPatientList] = useState(initialPatients);
+  const [patientList, setPatientList] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
@@ -68,17 +71,31 @@ export function PatientManagement() {
     mobile: '',
     email: '',
     age: '',
-    gender: '',
-    bloodGroup: '',
+    gender: 'Male',
+    bloodGroup: 'A+',
   });
 
-  const filtered = patientList.filter((p) => {
-    return (
-      p.name.toLowerCase().includes(query.toLowerCase()) ||
-      p.mobile.includes(query) ||
-      p.id.toLowerCase().includes(query.toLowerCase())
-    );
-  });
+  useEffect(() => {
+    fetch('/api/patients')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setPatientList(data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            mobile: p.mobile,
+            email: p.email || '—',
+            age: Number(p.age),
+            gender: p.gender,
+            bloodGroup: p.blood_group,
+            lastVisit: p.last_visit ? new Date(p.last_visit).toLocaleDateString('en-IN') : '—',
+            visits: 1,
+            selectedConditions: p.selected_conditions || [],
+          })));
+        }
+      })
+      .catch(err => console.error('Error loading patients:', err));
+  }, []);
 
   const handleOpenHistory = (patient: any) => {
     setSelectedPatient(patient);
@@ -88,27 +105,58 @@ export function PatientManagement() {
     setHistoryRecords([...savedHistory, ...dummy]);
   };
 
-  const handleAddPatient = () => {
+  const handleAddPatient = async () => {
     if (!patientForm.name.trim() || !patientForm.mobile.trim()) return;
 
-    setPatientList((prev) => [
-      {
-        id: `P${String(prev.length + 1).padStart(3, '0')}`,
-        name: patientForm.name.trim(),
-        mobile: patientForm.mobile.trim(),
-        email: patientForm.email.trim() || '—',
-        age: Number(patientForm.age) || 0,
-        gender: patientForm.gender || '—',
-        bloodGroup: patientForm.bloodGroup || '—',
-        lastVisit: '—',
-        visits: 0,
-        selectedConditions: [],
-      },
-      ...prev,
-    ]);
-    setPatientForm({ name: '', mobile: '', email: '', age: '', gender: '', bloodGroup: '' });
-    setShowAddForm(false);
+    const newPatient = {
+      name: patientForm.name.trim(),
+      mobile: patientForm.mobile.trim(),
+      email: patientForm.email.trim() || undefined,
+      age: patientForm.age,
+      gender: patientForm.gender || 'Male',
+      bloodGroup: patientForm.bloodGroup || 'A+',
+      selectedConditions: [],
+    };
+
+    try {
+      const response = await fetch('/api/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPatient)
+      });
+      if (response.ok) {
+        const saved = await response.json();
+        setPatientList((prev) => [
+          {
+            id: saved.id,
+            name: saved.name,
+            mobile: saved.mobile,
+            email: saved.email || '—',
+            age: Number(saved.age) || 0,
+            gender: saved.gender || '—',
+            bloodGroup: saved.blood_group || '—',
+            lastVisit: saved.last_visit ? new Date(saved.last_visit).toLocaleDateString('en-IN') : '—',
+            visits: 0,
+            selectedConditions: saved.selected_conditions || [],
+          },
+          ...prev,
+        ]);
+        setPatientForm({ name: '', mobile: '', email: '', age: '', gender: 'Male', bloodGroup: 'A+' });
+        setShowAddForm(false);
+        toast.success('Patient added successfully!');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to save patient.');
+    }
   };
+
+  const filtered = patientList.filter(
+    (p) =>
+      (p.name?.toLowerCase() || '').includes(query.toLowerCase()) ||
+      (p.mobile || '').includes(query) ||
+      (p.id?.toLowerCase() || '').includes(query.toLowerCase())
+  );
 
   return (
     <div className="space-y-5">

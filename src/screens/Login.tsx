@@ -7,12 +7,7 @@ import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 
 const DOCTOR_CREDENTIALS: Record<string, { id: string; password: string; label: string }> = {
-  'sharma@gmail.com':  { id: 'D001', password: 'sharma123',  label: 'Dr. Sharma'  },
-  'patel@gmail.com':   { id: 'D002', password: 'patel123',   label: 'Dr. Patel'   },
-  'kumar@gmail.com':   { id: 'D003', password: 'kumar123',   label: 'Dr. Kumar'   },
-  'singh@gmail.com':   { id: 'D004', password: 'singh123',   label: 'Dr. Singh'   },
-  'mehta@gmail.com':   { id: 'D005', password: 'mehta123',   label: 'Dr. Mehta'   },
-  'rao@gmail.com':     { id: 'D006', password: 'rao123',     label: 'Dr. Rao'     },
+  'sharma@gmail.com': { id: 'D001', password: 'sharma123', label: 'Doctor' },
 };
 
 export function Login() {
@@ -26,119 +21,63 @@ export function Login() {
   const performLogin = async (emailVal: string, passVal: string) => {
     setLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: emailVal, password: passVal }),
+      });
 
-    const trimmedEmail = emailVal.trim().toLowerCase();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Authentication failed');
+      }
 
-    if (trimmedEmail === 'harsh@gmail.com' && passVal === 'harsh123') {
-      const receptionUser = { id: 'RC001', name: 'Harsh Reception', email: 'harsh@gmail.com', role: 'Receptionist' };
+      const { token, user } = await response.json();
       clearDemoUsers();
-      localStorage.setItem('current-reception-user', JSON.stringify(receptionUser));
-      startSession();
-      toast.success('Welcome back, Receptionist!');
-      navigate('/dashboard');
-    } else if (DOCTOR_CREDENTIALS[trimmedEmail] && passVal === DOCTOR_CREDENTIALS[trimmedEmail].password) {
-      const doctorId = DOCTOR_CREDENTIALS[trimmedEmail].id;
-      const matchedDoctor = doctors.find((d) => d.id === doctorId) || doctors[0];
-      clearDemoUsers();
-      localStorage.setItem('current-doctor', JSON.stringify(matchedDoctor));
-      toast.success(`Welcome, ${matchedDoctor.name}`);
-      navigate('/doctor-dashboard');
-    } else if (trimmedEmail === 'pharmacy@gmail.com' && passVal === 'pharmacy123') {
-      const mockUser = { id: 'PH003', name: 'Pharmacy Staff', email: 'pharmacy@gmail.com', role: 'Pharmacy Staff', loginAt: new Date().toISOString() };
-      clearDemoUsers();
-      localStorage.setItem('current-pharmacy-user', JSON.stringify(mockUser));
-      toast.success('Welcome to Pharmacy Portal!');
-      navigate('/pharmacy-dashboard');
-    } else if (trimmedEmail === 'lab@gmail.com' && passVal === 'lab123') {
-      const mockUser = { id: 'LB001', name: 'Lab Staff', email: 'lab@gmail.com', role: 'Chief Pathologist', loginAt: new Date().toISOString() };
-      clearDemoUsers();
-      localStorage.setItem('current-lab-user', JSON.stringify(mockUser));
-      toast.success('Welcome to Lab Portal!');
-      navigate('/lab-dashboard');
-    } else if (trimmedEmail === 'admin@gmail.com' && passVal === 'admin123') {
-      const adminUser = { id: 'ADM001', name: 'Prem Admin', email: 'admin@gmail.com', role: 'Administrator' };
-      clearDemoUsers();
-      localStorage.setItem('current-admin-user', JSON.stringify(adminUser));
-      toast.success('Welcome to Admin Portal!');
-      navigate('/admin/dashboard');
-    } else {
-      toast.error('Invalid email or password. Please try again.');
+      localStorage.setItem('opd-auth-token', token);
+
+      if (user.role === 'Receptionist') {
+        localStorage.setItem('current-reception-user', JSON.stringify(user));
+        startSession();
+        toast.success('Welcome back, Receptionist!');
+        navigate('/dashboard');
+      } else if (user.role === 'Doctor') {
+        localStorage.setItem('current-doctor', JSON.stringify(user));
+        toast.success(`Welcome, ${user.name}`);
+        navigate('/doctor-dashboard');
+      } else if (user.role === 'Pharmacy Staff') {
+        localStorage.setItem('current-pharmacy-user', JSON.stringify({ ...user, loginAt: new Date().toISOString() }));
+        toast.success('Welcome to Pharmacy Portal!');
+        navigate('/pharmacy-dashboard');
+      } else if (user.role === 'Chief Pathologist') {
+        localStorage.setItem('current-lab-user', JSON.stringify({ ...user, loginAt: new Date().toISOString() }));
+        toast.success('Welcome to Lab Portal!');
+        navigate('/lab-dashboard');
+      } else if (user.role === 'Administrator') {
+        localStorage.setItem('current-admin-user', JSON.stringify(user));
+        toast.success('Welcome to Admin Portal!');
+        navigate('/admin/dashboard');
+      } else {
+        toast.error('Unknown user role.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast.error(error.message || 'Invalid email or password. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     await performLogin(email, password);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    const trimmedEmail = email.trim().toLowerCase();
-
-    // 1. Receptionist
-    if (trimmedEmail === 'harsh@gmail.com' && password === 'harsh123') {
-      const receptionUser = {
-        id: 'RC001',
-        name: 'Harsh Reception',
-        email: 'harsh@gmail.com',
-        role: 'Receptionist',
-      };
-      clearDemoUsers();
-      localStorage.setItem('current-reception-user', JSON.stringify(receptionUser));
-      startSession();
-      toast.success('Welcome back, Receptionist!');
-      navigate('/dashboard');
-    }
-    // 2. Doctors — individual credentials per doctor
-    else if (DOCTOR_CREDENTIALS[trimmedEmail] && password === DOCTOR_CREDENTIALS[trimmedEmail].password) {
-      const doctorId = DOCTOR_CREDENTIALS[trimmedEmail].id;
-      const matchedDoctor = doctors.find((d) => d.id === doctorId) || doctors[0];
-      clearDemoUsers();
-      localStorage.setItem('current-doctor', JSON.stringify(matchedDoctor));
-      toast.success(`Welcome, ${matchedDoctor.name}`);
-      navigate('/doctor-dashboard');
-    }
-    // 3. Pharmacy
-    else if (trimmedEmail === 'pharmacy@gmail.com' && password === 'pharmacy123') {
-      const mockUser = { id: 'PH003', name: 'Pharmacy Staff', email: 'pharmacy@gmail.com', role: 'Pharmacy Staff', loginAt: new Date().toISOString() };
-      clearDemoUsers();
-      localStorage.setItem('current-pharmacy-user', JSON.stringify(mockUser));
-      toast.success('Welcome to Pharmacy Portal!');
-      navigate('/pharmacy-dashboard');
-    }
-    // 4. Lab
-    else if (trimmedEmail === 'lab@gmail.com' && password === 'lab123') {
-      const mockUser = { id: 'LB001', name: 'Lab Staff', email: 'lab@gmail.com', role: 'Chief Pathologist', loginAt: new Date().toISOString() };
-      clearDemoUsers();
-      localStorage.setItem('current-lab-user', JSON.stringify(mockUser));
-      toast.success('Welcome to Lab Portal!');
-      navigate('/lab-dashboard');
-    }
-    // 5. Admin
-    else if (trimmedEmail === 'admin@gmail.com' && password === 'admin123') {
-      const adminUser = { id: 'ADM001', name: 'Prem Admin', email: 'admin@gmail.com', role: 'Administrator' };
-      clearDemoUsers();
-      localStorage.setItem('current-admin-user', JSON.stringify(adminUser));
-      toast.success('Welcome to Admin Portal!');
-      navigate('/admin/dashboard');
-    }
-    // Invalid
-    else {
-      toast.error('Invalid email or password. Please try again.');
-    }
-
   };
 
   return (
     <div className="min-h-screen bg-[var(--neutral-100)] flex flex-col items-center justify-center p-6 font-sans">
-      {/* Demo mode warning banner */}
-      <div className="w-full max-w-md mb-3 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--warning-50)] border border-[var(--warning-200)] text-[var(--warning-800)] text-xs">
-        <ShieldCheck size={14} className="flex-shrink-0 text-[var(--warning-600)]" />
-        <span><strong>DEMO MODE</strong> — Credentials are hardcoded for demonstration only. Do not use in production.</span>
-      </div>
       <div className="w-full max-w-md bg-white border border-[var(--neutral-200)] rounded-xl p-8 shadow-sm space-y-6">
         {/* Logo and Headings */}
         <div className="text-center">
@@ -230,9 +169,7 @@ export function Login() {
                 Admin
               </Button>
             </div>
-            {/* Individual doctor logins */}
-            <p className="text-[10px] text-[var(--neutral-400)] text-center pt-1">Doctors</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col gap-2">
               {Object.entries(DOCTOR_CREDENTIALS).map(([email, { password, label }]) => (
                 <Button
                   key={email}
