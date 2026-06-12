@@ -11,23 +11,25 @@ import { useApp } from '../context/AppContext';
 export function TokenReceipt() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { patient, doctor, isNew, token } = location.state || {};
+  const { patient, doctor, isNew } = location.state || {};
   const { addToken } = useApp();
   const [hasAddedToken, setHasAddedToken] = useState(false);
   const [isIssued, setIsIssued] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'card'>('upi');
+  // Generated once at the moment of issuance, stored in state so re-renders don't increment
+  const [issuedToken, setIssuedToken] = useState<string>('');
 
   const fee = isNew ? 500 : 300;
 
-  // Use token from navigation state; only generate a new one if arriving without state
-  const displayToken = token || generateTokenNumber();
-
   const handleIssueToken = (payNow: boolean) => {
     if (patient && doctor && !hasAddedToken) {
+      // Generate exactly once, right here at issuance time
+      const newToken = generateTokenNumber();
+      setIssuedToken(newToken);
       addToken({
         id: `token-${Date.now()}-${Math.random()}`,
-        token: displayToken,
+        token: newToken,
         patient,
         doctor,
         issuedAt: new Date().toISOString(),
@@ -43,9 +45,9 @@ export function TokenReceipt() {
       setIsPaid(payNow);
       setIsIssued(true);
       if (payNow) {
-        toast.success(`Payment ₹${fee} settled! Token ${displayToken} issued.`);
+        toast.success(`Payment ₹${fee} settled! Token ${newToken} issued.`);
       } else {
-        toast.success(`Token ${displayToken} issued. Payment deferred.`);
+        toast.success(`Token ${newToken} issued. Payment deferred.`);
       }
     }
   };
@@ -179,7 +181,7 @@ export function TokenReceipt() {
               <div className="text-center mb-6">
                 <p className="text-xs uppercase tracking-wider text-[var(--neutral-400)] mb-2">TOKEN NUMBER</p>
                 <div className="bg-[var(--teal-50)] rounded-2xl py-6 px-10 inline-block border border-[var(--teal-100)]">
-                  <p className="font-mono text-6xl font-bold text-[var(--teal-700)]">{displayToken}</p>
+                  <p className="font-mono text-6xl font-bold text-[var(--teal-700)]">{issuedToken}</p>
                 </div>
                 <div className="mt-4">
                   <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${

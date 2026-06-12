@@ -8,11 +8,12 @@ export function AdminDashboard() {
   const completed = tokens.filter((token) => token.status === 'done').length;
   const labCases = tokens.filter((token) => token.labTests?.length).length;
   const pharmacyCases = tokens.filter((token) => token.prescription?.length).length;
+  // Compute from line items — billingAmount only stores the consultation fee at check-in
   const revenue = tokens.reduce((sum, token) => {
     const consultation = token.isNewPatient ? 500 : 300;
     const pharmacy = (token.prescription?.length || 0) * 150;
     const lab = (token.labTests?.length || 0) * 250;
-    return sum + (token.billingAmount || consultation + pharmacy + lab);
+    return sum + consultation + pharmacy + lab;
   }, 0);
 
   const stats = [

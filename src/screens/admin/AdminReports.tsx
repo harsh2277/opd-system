@@ -7,7 +7,13 @@ export function AdminReports() {
   const completed = tokens.filter((token) => token.status === 'done').length;
   const labCases = tokens.filter((token) => token.labTests?.length).length;
   const pharmacyCases = tokens.filter((token) => token.prescription?.length).length;
-  const revenue = tokens.reduce((sum, token) => sum + (token.billingAmount || (token.isNewPatient ? 500 : 300)), 0);
+  // Compute from line items — billingAmount only stores consultation at check-in
+  const revenue = tokens.reduce((sum, token) => {
+    const consultation = token.isNewPatient ? 500 : 300;
+    const pharmacy = (token.prescription?.length || 0) * 150;
+    const lab = (token.labTests?.length || 0) * 250;
+    return sum + consultation + pharmacy + lab;
+  }, 0);
   const reports = [
     ['Daily OPD Summary', 'Operations', `${tokens.length} tokens`],
     ['Doctor Utilization', 'Clinical', `${doctors.length} doctors`],

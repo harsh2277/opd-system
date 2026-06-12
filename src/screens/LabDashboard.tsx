@@ -1,17 +1,28 @@
 import { useState } from 'react';
-import { CheckCircle, Clock, FileText, FlaskConical, User, Send } from 'lucide-react';
+import { CheckCircle, Clock, FileText, FlaskConical, User, Send, Search } from 'lucide-react';
 import { useApp, Token } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 
 export function LabDashboard() {
-  const { tokens, completeLabRequest, addNotification } = useApp();
+  const { tokens, completeLabRequest, updateLabTest, addNotification } = useApp();
   const [selectedTokenNumber, setSelectedTokenNumber] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [reportNotes, setReportNotes] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const pendingLabTokens = tokens.filter((t) => t.labTests && t.labTests.length > 0 && t.labStatus === 'pending');
-  const completedLabTokens = tokens.filter((t) => t.labTests && t.labTests.length > 0 && t.labStatus === 'completed');
+  const filterTokens = (list: Token[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(
+      t => t.patient.name.toLowerCase().includes(q) || t.token.toLowerCase().includes(q) || t.patient.mobile.includes(q)
+    );
+  };
+
+  const allPendingLab = tokens.filter((t) => t.labTests && t.labTests.length > 0 && t.labStatus === 'pending');
+  const allCompletedLab = tokens.filter((t) => t.labTests && t.labTests.length > 0 && t.labStatus === 'completed');
+  const pendingLabTokens = filterTokens(allPendingLab);
+  const completedLabTokens = filterTokens(allCompletedLab);
   const selectedToken = tokens.find((t) => t.token === selectedTokenNumber);
 
   const handleSelectToken = (token: Token) => {
@@ -19,10 +30,24 @@ export function LabDashboard() {
     setReportNotes(token.labReportNotes || '');
   };
 
+  const handleMarkTestDone = (testName: string) => {
+    if (!selectedToken) return;
+    updateLabTest(selectedToken.token, testName);
+    toast.success(`${testName} marked complete`);
+    // Check if all tests are now done — if so, prompt for report notes
+    const updatedTests = (selectedToken.labTests || []).map(t =>
+      t.name === testName ? { ...t, status: 'completed' as const } : t
+    );
+    const allDone = updatedTests.every(t => t.status === 'completed');
+    if (allDone) {
+      toast.info('All tests complete — add report notes and finalise');
+    }
+  };
+
   const handleCompleteReport = () => {
     if (!selectedToken) return;
     if (!reportNotes.trim()) {
-      toast.error('Add report notes before marking complete');
+      toast.error('Add report notes before finalising');
       return;
     }
 
@@ -31,7 +56,7 @@ export function LabDashboard() {
       `Lab report completed for ${selectedToken.patient.name} (${selectedToken.token})`,
       'success'
     );
-    toast.success('Lab report marked complete');
+    toast.success('Lab report finalised and sent to doctor');
     setSelectedTokenNumber(null);
     setReportNotes('');
   };
@@ -78,6 +103,20 @@ export function LabDashboard() {
             </button>
           </div>
 
+          {/* Search */}
+          <div className="px-4 pt-3 pb-2 border-b border-[var(--neutral-100)]">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--neutral-400)]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search patient, token, mobile..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-[var(--neutral-200)] rounded-md bg-white focus:outline-none focus:border-[var(--brand-400)]"
+              />
+            </div>
+          </div>
+
           <div className="p-4 min-h-[450px] max-h-[640px] overflow-y-auto">
             {visibleTokens.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -113,7 +152,14 @@ export function LabDashboard() {
                       <span>{token.labTests?.length || 0} test(s)</span>
                     </p>
                     <div className="mt-3 pt-3 border-t border-[var(--neutral-100)]">
-                      <p className="text-[10px] font-semibold text-[var(--neutral-400)] uppercase tracking-wider mb-1">Requested Tests</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-semibold text-[var(--neutral-400)] uppercase tracking-wider">Tests</p>
+                        {token.labStatus === 'pending' && (
+                          <span className="text-[10px] font-semibold text-[var(--brand-600)]">
+                            {(token.labTests || []).filter(t => t.status === 'completed').length}/{token.labTests?.length} done
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-[var(--neutral-700)] line-clamp-2">
                         {(token.labTests || []).map((test) => test.name).join(', ')}
                       </p>
@@ -165,17 +211,50 @@ export function LabDashboard() {
               </div>
 
               <div>
-                <h3 className="text-xs font-semibold text-[var(--neutral-500)] uppercase tracking-wider mb-2">Tests</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-[var(--neutral-500)] uppercase tracking-wider">Tests</h3>
+                  <span className="text-[10px] text-[var(--neutral-400)]">
+                    {(selectedToken.labTests || []).filter(t => t.status === 'completed').length} / {selectedToken.labTests?.length} done
+                  </span>
+                </div>
                 <div className="space-y-2">
-                  {(selectedToken.labTests || []).map((test, index) => (
-                    <div key={`${test.name}-${index}`} className="p-3 bg-[var(--neutral-50)] border border-[var(--neutral-100)] rounded-lg">
-                      <p className="text-xs font-semibold text-[var(--neutral-800)] flex items-center gap-2">
-                        <FlaskConical size={12} className="text-[var(--teal-500)]" />
-                        {test.name}
-                      </p>
-                      {test.notes && <p className="text-[10px] text-[var(--neutral-500)] mt-1">{test.notes}</p>}
-                    </div>
-                  ))}
+                  {(selectedToken.labTests || []).map((test, index) => {
+                    const isDone = test.status === 'completed';
+                    return (
+                      <div
+                        key={`${test.name}-${index}`}
+                        className={`p-3 border rounded-lg flex items-center justify-between gap-2 transition-colors ${
+                          isDone
+                            ? 'bg-[var(--success-50)] border-[var(--success-200)]'
+                            : 'bg-[var(--neutral-50)] border-[var(--neutral-100)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FlaskConical size={12} className={isDone ? 'text-[var(--success-600)]' : 'text-[var(--teal-500)]'} />
+                          <div>
+                            <p className={`text-xs font-semibold ${isDone ? 'text-[var(--success-700)] line-through decoration-1' : 'text-[var(--neutral-800)]'}`}>
+                              {test.name}
+                            </p>
+                            {test.notes && <p className="text-[10px] text-[var(--neutral-500)]">{test.notes}</p>}
+                            {isDone && test.completedAt && (
+                              <p className="text-[10px] text-[var(--success-600)] mt-0.5">
+                                Done {new Date(test.completedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {!isDone && selectedToken.labStatus === 'pending' && (
+                          <button
+                            onClick={() => handleMarkTestDone(test.name)}
+                            className="flex-shrink-0 text-[10px] font-semibold px-2.5 py-1 bg-[var(--brand-500)] hover:bg-[var(--brand-700)] text-white rounded-md transition-colors"
+                          >
+                            Mark Done
+                          </button>
+                        )}
+                        {isDone && <CheckCircle size={14} className="text-[var(--success-500)] flex-shrink-0" />}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

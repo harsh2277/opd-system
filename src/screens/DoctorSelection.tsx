@@ -6,7 +6,6 @@ import { Badge } from '../components/ui/badge';
 import { Stethoscope, Users, Clock, Check, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
-import { generateTokenNumber } from '../utils/tokenCounter';
 
 export function DoctorSelection() {
   const navigate = useNavigate();
@@ -27,16 +26,15 @@ export function DoctorSelection() {
 
   if (!patient) return null;
 
+  // Token number is generated in TokenReceipt at the moment of actual issuance,
+  // not here — avoids wasted increment if the user navigates away from the receipt page.
   const handleIssueToken = () => {
     if (selectedDoctor) {
-      const uniqueToken = generateTokenNumber();
-
       navigate('/token-receipt', {
         state: {
           patient,
           doctor: selectedDoctor,
           isNew,
-          token: uniqueToken,
         },
       });
     }

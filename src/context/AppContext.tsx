@@ -10,6 +10,8 @@ export interface Medicine {
 export interface LabTestRequest {
   name: string;
   notes?: string;
+  status?: 'pending' | 'completed';
+  completedAt?: string;
 }
 
 interface Patient {
@@ -86,6 +88,7 @@ interface AppContextType {
   settleBilling: (tokenNumber: string, consultationPaid: boolean, prescriptionPaid: boolean, labPaid: boolean, amount: number, paymentMethod?: 'upi' | 'cash' | 'card') => void;
   requestLabTests: (tokenNumber: string, tests: LabTestRequest[]) => void;
   completeLabRequest: (tokenNumber: string, reportNotes: string) => void;
+  updateLabTest: (tokenNumber: string, testName: string) => void;
   addNotification: (text: string, type?: Notification['type']) => void;
   clearNotifications: () => void;
   markNotificationsAsRead: () => void;
@@ -317,9 +320,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
               labStatus: 'completed',
               labCompletedAt: new Date().toISOString(),
               labReportNotes: reportNotes,
+              // Mark all tests as completed when bulk-completing
+              labTests: (token.labTests || []).map(t => ({
+                ...t,
+                status: 'completed' as const,
+                completedAt: new Date().toISOString(),
+              })),
             }
           : token
       )
+    );
+  };
+
+  const updateLabTest = (tokenNumber: string, testName: string) => {
+    setTokens((prev) =>
+      prev.map((token) => {
+        if (token.token !== tokenNumber) return token;
+        const now = new Date().toISOString();
+        const updatedTests = (token.labTests || []).map(t =>
+          t.name === testName ? { ...t, status: 'completed' as const, completedAt: now } : t
+        );
+        const allDone = updatedTests.every(t => t.status === 'completed');
+        return {
+          ...token,
+          labTests: updatedTests,
+          labStatus: allDone ? 'completed' : 'pending',
+          labCompletedAt: allDone ? now : undefined,
+        };
+      })
     );
   };
 
@@ -407,6 +435,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         settleBilling,
         requestLabTests,
         completeLabRequest,
+        updateLabTest,
         addNotification,
         clearNotifications,
         markNotificationsAsRead,

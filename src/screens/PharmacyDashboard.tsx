@@ -10,28 +10,51 @@ import {
   DollarSign,
   AlertCircle,
   Package,
-  Activity,
   User,
   ShoppingBag,
+  Search,
 } from 'lucide-react';
 
 export function PharmacyDashboard() {
   const { tokens, dispensePrescription, addNotification } = useApp();
   const [selectedTokenNumber, setSelectedTokenNumber] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'dispensed'>('pending');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [doctorFilter, setDoctorFilter] = useState<string>('All');
 
   // Edit states for currently selected prescription
   const [tempMedicines, setTempMedicines] = useState<Medicine[]>([]);
   const [newMed, setNewMed] = useState<Medicine>({ name: '', dosage: '', duration: '', instructions: '' });
   const [customBillAmount, setCustomBillAmount] = useState<number>(0);
 
-  const pendingTokens = tokens.filter(
-    (t) => t.status === 'done' && t.prescription && t.prescriptionStatus === 'pending'
+  const allPending = tokens.filter(
+    (t) => t.prescription && t.prescription.length > 0 && t.prescriptionStatus === 'pending'
   );
-
-  const dispensedTokens = tokens.filter(
+  const allDispensed = tokens.filter(
     (t) => t.prescription && t.prescriptionStatus === 'dispensed'
   );
+
+  // Unique doctors across pending prescriptions for filter chips
+  const pendingDoctors = ['All', ...Array.from(new Set(allPending.map(t => t.doctor.name)))];
+
+  const applyFilters = (list: Token[]) => {
+    return list
+      .filter(t => doctorFilter === 'All' || t.doctor.name === doctorFilter)
+      .filter(t => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return t.patient.name.toLowerCase().includes(q) || t.token.toLowerCase().includes(q) || t.patient.mobile.includes(q);
+      })
+      // Urgent patients first, then oldest first
+      .sort((a, b) => {
+        if (a.urgent && !b.urgent) return -1;
+        if (!a.urgent && b.urgent) return 1;
+        return new Date(a.issuedAt).getTime() - new Date(b.issuedAt).getTime();
+      });
+  };
+
+  const pendingTokens = applyFilters(allPending);
+  const dispensedTokens = applyFilters(allDispensed);
 
   const selectedToken = tokens.find((t) => t.token === selectedTokenNumber);
 
@@ -123,6 +146,37 @@ export function PharmacyDashboard() {
             </button>
           </div>
 
+          {/* Search + Doctor Filter */}
+          <div className="px-4 pt-3 pb-2 space-y-2 border-b border-neutral-100">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search patient, token, mobile..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-neutral-200 rounded-md bg-white focus:outline-none focus:border-brand-400"
+              />
+            </div>
+            {pendingDoctors.length > 2 && (
+              <div className="flex flex-wrap gap-1.5">
+                {pendingDoctors.map(doc => (
+                  <button
+                    key={doc}
+                    onClick={() => setDoctorFilter(doc)}
+                    className={`text-[10px] px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                      doctorFilter === doc
+                        ? 'bg-brand-500 border-brand-500 text-white'
+                        : 'bg-white border-neutral-200 text-neutral-600 hover:border-brand-300 hover:text-brand-700'
+                    }`}
+                  >
+                    {doc === 'All' ? 'All Doctors' : `Dr. ${doc}`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* List Content */}
           <div className="p-4 min-h-[450px] max-h-[600px] overflow-y-auto">
             {activeTab === 'pending' ? (
@@ -142,9 +196,16 @@ export function PharmacyDashboard() {
                         <span className="font-mono font-bold text-xs bg-brand-50 border border-brand-200 text-brand-700 px-2 py-0.5 rounded">
                           {t.token}
                         </span>
-                        <span className="text-[10px] font-semibold bg-warning-50 border border-warning-200 text-warning-700 px-2 py-0.5 rounded">
-                          Pending Dispense
-                        </span>
+                        <div className="flex items-center gap-1">
+                          {t.urgent && (
+                            <span className="text-[10px] font-bold bg-error-500 text-white px-2 py-0.5 rounded animate-pulse">
+                              URGENT
+                            </span>
+                          )}
+                          <span className="text-[10px] font-semibold bg-warning-50 border border-warning-200 text-warning-700 px-2 py-0.5 rounded">
+                            Pending
+                          </span>
+                        </div>
                       </div>
                       <h3 className="font-semibold text-sm text-neutral-800">{t.patient.name}</h3>
                       <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1.5">
