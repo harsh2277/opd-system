@@ -44,3 +44,8 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Server specific
+server/.env
+server/dist/
+
