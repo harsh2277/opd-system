@@ -279,6 +279,19 @@ export function DoctorDashboard() {
               )}
             </div>
 
+            {/* Urgent patient banner */}
+            {waitingTokens.some(t => t.urgent) && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-[var(--error-50)] border border-[var(--error-200)] rounded-lg">
+                <AlertCircle size={16} className="text-[var(--error-500)] flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[var(--error-700)]">Urgent Patient Waiting</p>
+                  <p className="text-[10px] text-[var(--error-600)]">
+                    {waitingTokens.filter(t => t.urgent).map(t => `${t.patient.name} (${t.token})`).join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'queue' ? (
               <>
                 {/* Stats */}

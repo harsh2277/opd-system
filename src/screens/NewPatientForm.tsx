@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { mockPatients } from '../data/mockPatients';
 
-const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Not Known'];
 const conditions = ['Diabetes', 'Hypertension', 'Asthma', 'Heart Disease', 'Thyroid'];
 
 export function NewPatientForm() {

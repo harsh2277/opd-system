@@ -1,5 +1,15 @@
 import { useState } from 'react';
 import { useApp, Token, Medicine } from '../context/AppContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
@@ -26,6 +36,8 @@ export function PharmacyDashboard() {
   const [tempMedicines, setTempMedicines] = useState<Medicine[]>([]);
   const [newMed, setNewMed] = useState<Medicine>({ name: '', dosage: '', duration: '', instructions: '' });
   const [customBillAmount, setCustomBillAmount] = useState<number>(0);
+  const [showDispenseConfirm, setShowDispenseConfirm] = useState(false);
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
 
   const allPending = tokens.filter(
     (t) => t.prescription && t.prescription.length > 0 && t.prescriptionStatus === 'pending'
@@ -77,9 +89,16 @@ export function PharmacyDashboard() {
   };
 
   const handleRemoveMedicine = (index: number) => {
-    const updated = tempMedicines.filter((_, i) => i !== index);
+    setPendingDeleteIndex(index);
+  };
+
+  const confirmRemoveMedicine = () => {
+    if (pendingDeleteIndex === null) return;
+    const updated = tempMedicines.filter((_, i) => i !== pendingDeleteIndex);
     setTempMedicines(updated);
     setCustomBillAmount(updated.length * 150 + 20);
+    setPendingDeleteIndex(null);
+    toast.info('Medicine removed from prescription');
   };
 
   const handleDispense = () => {
@@ -88,21 +107,82 @@ export function PharmacyDashboard() {
       toast.error('Prescription must have at least one medicine');
       return;
     }
+    setShowDispenseConfirm(true);
+  };
 
+  const confirmDispense = () => {
+    if (!selectedToken) return;
     dispensePrescription(selectedToken.token, tempMedicines, customBillAmount);
-    
-    // Add real-time notification for admin
     addNotification(
       `Prescription delivered & Billing collected for ${selectedToken.patient.name} (${selectedToken.token}) - Total Paid: ₹${customBillAmount}`,
       'success'
     );
-
     toast.success(`Medicines dispensed and ₹${customBillAmount} collected successfully!`);
+    printReceipt(selectedToken, tempMedicines, customBillAmount);
     setSelectedTokenNumber(null);
+    setShowDispenseConfirm(false);
+  };
+
+  const printReceipt = (token: Token, meds: Medicine[], amount: number) => {
+    const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const html = `<!DOCTYPE html><html><head><title>Pharmacy Receipt – ${token.token}</title>
+    <style>
+      body{font-family:Arial,sans-serif;max-width:400px;margin:30px auto;font-size:12px;color:#111;}
+      h1{font-size:16px;margin:0 0 2px;} h2{font-size:11px;color:#555;margin:0 0 16px;font-weight:normal;}
+      .token{font-size:24px;font-weight:bold;font-family:monospace;text-align:center;background:#f5f5f5;padding:8px;border-radius:6px;margin:10px 0;}
+      table{width:100%;border-collapse:collapse;margin:10px 0;} td{padding:4px 2px;} td:last-child{text-align:right;}
+      tr.total td{border-top:2px solid #111;font-weight:bold;padding-top:6px;} .label{color:#666;font-size:10px;}
+      @media print{body{margin:0;}}
+    </style></head><body>
+    <h1>OPD Pharmacy</h1><h2>Dispensing Receipt · ${date} · ${time}</h2>
+    <div class="token">${token.token}</div>
+    <p><b>Patient:</b> ${token.patient.name} · ${token.patient.age}y ${token.patient.gender}</p>
+    <p><b>Doctor:</b> ${token.doctor.name} (${token.doctor.specialty})</p>
+    <table>
+      <tr><td class="label">Medicine</td><td class="label">Dosage</td></tr>
+      ${meds.map(m => `<tr><td>${m.name}</td><td>${m.dosage}${m.duration ? ' · ' + m.duration : ''}</td></tr>`).join('')}
+      <tr class="total"><td>Total</td><td>₹${amount}</td></tr>
+    </table>
+    <script>window.onload=()=>{window.print();}</script></body></html>`;
+    const w = window.open('', '_blank', 'width=500,height=600');
+    if (w) { w.document.write(html); w.document.close(); }
   };
 
   return (
     <div className="space-y-6">
+      {/* Dispense confirmation */}
+      <AlertDialog open={showDispenseConfirm} onOpenChange={setShowDispenseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Dispensing</AlertDialogTitle>
+            <AlertDialogDescription>
+              Dispense {tempMedicines.length} medicine(s) to <strong>{selectedToken?.patient.name}</strong> and collect <strong>₹{customBillAmount}</strong>? A receipt will print automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDispense}>Confirm & Dispense</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Medicine removal confirmation */}
+      <AlertDialog open={pendingDeleteIndex !== null} onOpenChange={() => setPendingDeleteIndex(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Medicine</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove <strong>{pendingDeleteIndex !== null ? tempMedicines[pendingDeleteIndex]?.name : ''}</strong> from this prescription?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveMedicine} className="bg-[var(--error-500)] hover:bg-[var(--error-700)] text-white">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-neutral-900">Pharmacy Portal</h1>

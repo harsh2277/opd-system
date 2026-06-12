@@ -53,7 +53,33 @@ export function TokenReceipt() {
   };
 
   const handlePrint = () => {
-    toast.success('Token sent to printer');
+    const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const queueAhead = tokens.filter(
+      t => t.doctor?.id === doctor?.id && t.status === 'waiting' && t.token !== issuedToken
+    ).length;
+    const estWait = (queueAhead + 1) * (doctor?.avgWait || 15);
+    const html = `<!DOCTYPE html><html><head><title>Token ${issuedToken}</title>
+    <style>
+      body{font-family:Arial,sans-serif;max-width:340px;margin:30px auto;font-size:12px;color:#111;}
+      h1{font-size:16px;margin:0 0 2px;} h2{font-size:10px;color:#555;margin:0 0 16px;font-weight:normal;}
+      .token{font-size:56px;font-weight:bold;font-family:monospace;text-align:center;background:#eef6ff;padding:12px;border-radius:8px;margin:12px 0;color:#1d4ed8;}
+      .row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;}
+      .label{color:#777;} .wait{text-align:center;margin:12px 0;font-size:11px;background:#f5f5f5;padding:6px;border-radius:4px;}
+      @media print{body{margin:0;}}
+    </style></head><body>
+    <h1>OPD Token Receipt</h1><h2>${date} · ${time}</h2>
+    <div class="token">${issuedToken}</div>
+    <div class="row"><span class="label">Patient</span><span>${patient?.name || '—'}</span></div>
+    <div class="row"><span class="label">Age / Gender</span><span>${patient?.age || '—'} yrs · ${patient?.gender || '—'}</span></div>
+    <div class="row"><span class="label">Mobile</span><span>${patient?.mobile || '—'}</span></div>
+    <div class="row"><span class="label">Doctor</span><span>${doctor?.name || '—'}</span></div>
+    <div class="row"><span class="label">Specialty</span><span>${doctor?.specialty || '—'}</span></div>
+    <div class="row"><span class="label">Fee</span><span>₹${fee} (${isPaid ? 'Paid' : 'Pay Later'})</span></div>
+    <div class="wait">⏱ Estimated wait: ~${estWait} mins (Position ${queueAhead + 1})</div>
+    <script>window.onload=()=>{window.print();}</script></body></html>`;
+    const w = window.open('', '_blank', 'width=400,height=600');
+    if (w) { w.document.write(html); w.document.close(); }
   };
 
   const handleSMS = () => {

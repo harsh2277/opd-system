@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -9,6 +10,7 @@ import {
   FileText,
   ArrowUpRight,
   ArrowRight,
+  Play,
 } from 'lucide-react';
 import { useApp, Token } from '../context/AppContext';
 
@@ -69,7 +71,14 @@ function deriveActivity(tokens: Token[]) {
 
 export function ReceptionDashboard() {
   const navigate = useNavigate();
-  const { tokens, doctors } = useApp();
+  const { tokens, doctors, sessionStartTime, startSession } = useApp();
+  const [, setTick] = useState(0);
+
+  // Refresh relative timestamps every 60 s
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const waiting = tokens.filter((t) => t.status === 'waiting').length;
   const inConsultation = tokens.filter((t) => t.status === 'in-consultation').length;
@@ -142,16 +151,27 @@ export function ReceptionDashboard() {
         <div>
           <h1 className="text-xl font-bold text-[var(--neutral-900)]">Dashboard</h1>
           <p className="text-xs text-[var(--neutral-500)] mt-0.5">
-            {todayLabel}&nbsp;&nbsp;·&nbsp;&nbsp;OPD Session Active
+            {todayLabel}&nbsp;&nbsp;·&nbsp;&nbsp;{sessionStartTime ? 'OPD Session Active' : 'No Session Started'}
           </p>
         </div>
-        <button
-          onClick={() => navigate('/patient-type')}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--brand-500)] hover:bg-[var(--brand-700)] text-white text-xs font-medium rounded-md transition-colors"
-        >
-          <UserPlus size={14} />
-          New Check-in
-        </button>
+        <div className="flex items-center gap-2">
+          {!sessionStartTime && (
+            <button
+              onClick={startSession}
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--success-600)] hover:bg-[var(--success-700)] text-white text-xs font-medium rounded-md transition-colors"
+            >
+              <Play size={14} />
+              Start Session
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/patient-type')}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--brand-500)] hover:bg-[var(--brand-700)] text-white text-xs font-medium rounded-md transition-colors"
+          >
+            <UserPlus size={14} />
+            New Check-in
+          </button>
+        </div>
       </div>
 
       {/* Stats Row */}

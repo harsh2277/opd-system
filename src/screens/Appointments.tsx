@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp, Appointment } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,6 +15,7 @@ import {
   Stethoscope,
   ChevronDown,
   ChevronUp,
+  ArrowRight,
 } from 'lucide-react';
 
 const TIME_SLOTS = [
@@ -25,6 +27,7 @@ const TIME_SLOTS = [
 const today = new Date().toISOString().split('T')[0];
 
 export function Appointments() {
+  const navigate = useNavigate();
   const { doctors, appointments, addAppointment, updateAppointmentStatus } = useApp();
   const [showForm, setShowForm] = useState(false);
   const [filterDate, setFilterDate] = useState(today);
@@ -59,6 +62,14 @@ export function Appointments() {
     if (!form.patientName.trim()) { toast.error('Enter patient name'); return; }
     if (!form.patientMobile || form.patientMobile.length !== 10) { toast.error('Enter valid 10-digit mobile'); return; }
     if (!form.doctorId) { toast.error('Select a doctor'); return; }
+
+    const conflict = appointments.find(
+      a => a.doctorId === form.doctorId && a.date === form.date && a.time === form.time && a.status !== 'cancelled'
+    );
+    if (conflict) {
+      toast.error(`${conflict.patientName} already has this slot. Pick another time.`);
+      return;
+    }
 
     const doctor = doctors.find(d => d.id === form.doctorId)!;
     addAppointment({
@@ -306,6 +317,33 @@ export function Appointments() {
                       Cancel
                     </button>
                   </div>
+                )}
+                {appt.status === 'arrived' && (
+                  <button
+                    onClick={() => {
+                      const doctor = doctors.find(d => d.id === appt.doctorId);
+                      if (!doctor) return;
+                      navigate('/doctor-selection', {
+                        state: {
+                          patient: {
+                            name: appt.patientName,
+                            mobile: appt.patientMobile,
+                            age: appt.patientAge || '',
+                            gender: appt.patientGender || 'Male',
+                            bloodGroup: 'Not Known',
+                            selectedConditions: [],
+                            address: '',
+                          },
+                          isNew: false,
+                          preselectedDoctorId: appt.doctorId,
+                        },
+                      });
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold rounded-md bg-[var(--brand-50)] border border-[var(--brand-200)] text-[var(--brand-700)] hover:bg-[var(--brand-100)] transition-colors"
+                  >
+                    Issue Token
+                    <ArrowRight size={10} />
+                  </button>
                 )}
               </div>
             ))}

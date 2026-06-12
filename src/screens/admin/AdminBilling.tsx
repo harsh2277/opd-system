@@ -18,12 +18,6 @@ type BillingRow = {
   time: string;
 };
 
-const fallbackRows: BillingRow[] = [
-  { id: 'mock-1', token: 'OPD-241', patient: 'Rajesh Kumar', mobile: '9876543210', category: 'Consultation', items: 'New patient consultation', amount: 500, method: 'UPI', time: '09:20 AM' },
-  { id: 'mock-2', token: 'OPD-242', patient: 'Priya Patel', mobile: '9876543211', category: 'Pharmacy', items: '3 medicines', amount: 450, method: 'Cash', time: '10:15 AM' },
-  { id: 'mock-3', token: 'OPD-243', patient: 'Amit Singh', mobile: '9876543212', category: 'Lab', items: 'CBC, Lipid profile', amount: 500, method: 'Card', time: '11:05 AM' },
-  { id: 'mock-4', token: 'OPD-244', patient: 'Meera Iyer', mobile: '9456789012', category: 'Combined', items: 'Consultation, pharmacy, lab', amount: 1250, method: 'UPI', time: '12:35 PM' },
-];
 
 export function AdminBilling() {
   const { tokens } = useApp();
@@ -31,8 +25,7 @@ export function AdminBilling() {
   const [category, setCategory] = useState<BillingCategory>('All');
 
   const rows = useMemo(() => {
-    const generated = tokens.flatMap(createBillingRowsFromToken);
-    return generated.length ? generated : fallbackRows;
+    return tokens.flatMap(createBillingRowsFromToken);
   }, [tokens]);
 
   const filtered = rows.filter((row) => {
@@ -40,10 +33,12 @@ export function AdminBilling() {
     return text.includes(query.toLowerCase()) && (category === 'All' || row.category === category);
   });
 
-  const total = rows.reduce((sum, row) => sum + row.amount, 0);
-  const consultationTotal = rows.filter((row) => row.category === 'Consultation').reduce((sum, row) => sum + row.amount, 0);
-  const labTotal = rows.filter((row) => row.category === 'Lab').reduce((sum, row) => sum + row.amount, 0);
-  const pharmacyTotal = rows.filter((row) => row.category === 'Pharmacy').reduce((sum, row) => sum + row.amount, 0);
+  // Exclude Combined rows from totals to avoid double-counting
+  const baseRows = rows.filter(r => r.category !== 'Combined');
+  const total = baseRows.reduce((sum, row) => sum + row.amount, 0);
+  const consultationTotal = baseRows.filter((row) => row.category === 'Consultation').reduce((sum, row) => sum + row.amount, 0);
+  const labTotal = baseRows.filter((row) => row.category === 'Lab').reduce((sum, row) => sum + row.amount, 0);
+  const pharmacyTotal = baseRows.filter((row) => row.category === 'Pharmacy').reduce((sum, row) => sum + row.amount, 0);
 
   return (
     <div className="space-y-5">
@@ -99,6 +94,13 @@ export function AdminBilling() {
               </tr>
             </thead>
             <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-xs text-[var(--neutral-400)]">
+                    No billing records found
+                  </td>
+                </tr>
+              )}
               {filtered.map((row) => (
                 <tr key={row.id} className="border-b border-[var(--neutral-100)] last:border-0 hover:bg-[var(--neutral-50)]">
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-[var(--brand-700)]">{row.token}</td>

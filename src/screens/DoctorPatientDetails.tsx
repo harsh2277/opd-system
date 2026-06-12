@@ -188,7 +188,7 @@ function SearchableDropdown({ value, onChange, options, placeholder, className =
 export function DoctorPatientDetails() {
   const navigate = useNavigate();
   const { tokenId } = useParams();
-  const { tokens, updateTokenStatus, updateDoctorStatus, addPrescription, requestLabTests, addNotification, prescriptionTemplates, savePrescriptionTemplate, deletePrescriptionTemplate } = useApp();
+  const { tokens, updateTokenStatus, updateDoctorStatus, addPrescription, requestLabTests, addNotification, prescriptionTemplates, savePrescriptionTemplate, deletePrescriptionTemplate, saveVitals, sendToPharmacy } = useApp();
   const [token, setToken] = useState<any>(null);
   const [currentDoctor, setCurrentDoctor] = useState<any>(null);
   const [history, setHistory] = useState<ConsultationNote[]>([]);
@@ -261,6 +261,11 @@ export function DoctorPatientDetails() {
       toast.error('Add medicines first');
       return;
     }
+    if (token.pharmacySentAt) {
+      toast.error('Prescription already sent to pharmacy');
+      return;
+    }
+    sendToPharmacy(token.token, medicines);
     toast.success(`${medicines.length} medicine(s) sent to pharmacy`);
   };
 
@@ -321,7 +326,11 @@ export function DoctorPatientDetails() {
     setVitals({ bp: '', temp: '', pulse: '', weight: '' });
     setMedicines([]);
     
-    if (medicines.length > 0) {
+    if (vitals.bp || vitals.temp || vitals.pulse || vitals.weight) {
+      saveVitals(token.token, { ...vitals });
+    }
+
+    if (medicines.length > 0 && !token.pharmacySentAt) {
       addPrescription(token.token, medicines);
       toast.success(`${medicines.length} medicine(s) sent to pharmacy`);
     }
@@ -680,10 +689,15 @@ export function DoctorPatientDetails() {
                         {medicines.length > 0 && (
                           <button
                             onClick={handleSendToPharmacy}
-                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--teal-300)] hover:text-[var(--teal-600)] rounded-md transition-colors"
+                            disabled={!!token.pharmacySentAt}
+                            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 border rounded-md transition-colors ${
+                              token.pharmacySentAt
+                                ? 'border-[var(--success-200)] text-[var(--success-600)] bg-[var(--success-50)] cursor-default'
+                                : 'border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--teal-300)] hover:text-[var(--teal-600)]'
+                            }`}
                           >
                             <Send size={11} />
-                            Send to Pharmacy
+                            {token.pharmacySentAt ? '✓ Sent to Pharmacy' : 'Send to Pharmacy'}
                           </button>
                         )}
                       </div>
@@ -910,6 +924,36 @@ export function DoctorPatientDetails() {
                   </div>
                 </div>
               </div>
+
+              {/* Lab Results — shown when lab report has been completed */}
+              {token.labStatus === 'completed' && (
+                <div className="bg-white border border-[var(--teal-200)] rounded-lg p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FlaskConical size={14} className="text-[var(--teal-600)]" />
+                    <p className="text-sm font-semibold text-[var(--teal-800)]">Lab Results Available</p>
+                    {token.labCompletedAt && (
+                      <span className="text-[10px] text-[var(--neutral-500)]">
+                        Completed {new Date(token.labCompletedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+                  {(token.labTests || []).length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-1.5">
+                      {(token.labTests || []).map(t => (
+                        <span key={t.name} className="text-xs px-2 py-1 bg-[var(--teal-50)] border border-[var(--teal-200)] text-[var(--teal-700)] rounded">
+                          ✓ {t.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {token.labReportNotes && (
+                    <div className="bg-[var(--teal-50)] border border-[var(--teal-100)] rounded-md px-4 py-3">
+                      <p className="text-[10px] font-semibold text-[var(--teal-700)] uppercase tracking-wide mb-1">Report Notes</p>
+                      <p className="text-sm text-[var(--neutral-800)] whitespace-pre-line">{token.labReportNotes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* History Timeline */}
               <div className="bg-white border border-[var(--neutral-200)] rounded-lg p-6">

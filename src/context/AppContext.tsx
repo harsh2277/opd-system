@@ -70,6 +70,8 @@ export interface Token {
   prescriptionStatus?: 'pending' | 'dispensed';
   billingStatus?: 'pending' | 'paid';
   billingAmount?: number;
+  vitals?: { bp: string; temp: string; pulse: string; weight: string };
+  pharmacySentAt?: string;
   labTests?: LabTestRequest[];
   labStatus?: 'pending' | 'completed';
   labRequestedAt?: string;
@@ -117,6 +119,8 @@ interface AppContextType {
   addNotification: (text: string, type?: Notification['type']) => void;
   clearNotifications: () => void;
   markNotificationsAsRead: () => void;
+  saveVitals: (tokenNumber: string, vitals: { bp: string; temp: string; pulse: string; weight: string }) => void;
+  sendToPharmacy: (tokenNumber: string, medicines: Medicine[]) => void;
   savePrescriptionTemplate: (name: string, medicines: Medicine[]) => void;
   deletePrescriptionTemplate: (id: string) => void;
   addAppointment: (appt: Omit<Appointment, 'id' | 'createdAt'>) => void;
@@ -448,6 +452,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const saveVitals = (tokenNumber: string, vitals: { bp: string; temp: string; pulse: string; weight: string }) => {
+    setTokens(prev =>
+      prev.map(token =>
+        token.token === tokenNumber ? { ...token, vitals } : token
+      )
+    );
+  };
+
+  const sendToPharmacy = (tokenNumber: string, medicines: Medicine[]) => {
+    setTokens(prev =>
+      prev.map(token =>
+        token.token === tokenNumber
+          ? { ...token, prescription: medicines, prescriptionStatus: 'pending', pharmacySentAt: new Date().toISOString() }
+          : token
+      )
+    );
+  };
+
   const savePrescriptionTemplate = (name: string, medicines: Medicine[]) => {
     const template: PrescriptionTemplate = {
       id: `tpl-${Date.now()}`,
@@ -525,6 +547,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addNotification,
         clearNotifications,
         markNotificationsAsRead,
+        saveVitals,
+        sendToPharmacy,
         savePrescriptionTemplate,
         deletePrescriptionTemplate,
         addAppointment,

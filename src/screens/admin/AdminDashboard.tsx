@@ -1,4 +1,4 @@
-import { Activity, CreditCard, IndianRupee, Stethoscope, TestTube2, Users } from 'lucide-react';
+import { Activity, CreditCard, IndianRupee, Stethoscope, TestTube2, Users, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export function AdminDashboard() {
@@ -8,6 +8,12 @@ export function AdminDashboard() {
   const completed = tokens.filter((token) => token.status === 'done').length;
   const labCases = tokens.filter((token) => token.labTests?.length).length;
   const pharmacyCases = tokens.filter((token) => token.prescription?.length).length;
+  const pendingCollections = tokens.filter(t => {
+    const consultationPending = !t.consultationPaid;
+    const medicinePending = (t.prescription?.length || 0) > 0 && !t.prescriptionPaid;
+    const labPending = (t.labTests?.length || 0) > 0 && !t.labPaid;
+    return consultationPending || medicinePending || labPending;
+  }).length;
   // Compute from line items — billingAmount only stores the consultation fee at check-in
   const revenue = tokens.reduce((sum, token) => {
     const consultation = token.isNewPatient ? 500 : 300;
@@ -19,7 +25,7 @@ export function AdminDashboard() {
   const stats = [
     { label: 'Today Tokens', value: tokens.length, icon: Activity },
     { label: 'Active Doctors', value: activeDoctors, icon: Stethoscope },
-    { label: 'Lab Cases', value: labCases, icon: TestTube2 },
+    { label: 'Pending Collections', value: pendingCollections, icon: AlertCircle },
     { label: 'Collection', value: `₹${revenue.toLocaleString('en-IN')}`, icon: IndianRupee },
   ];
 
@@ -120,12 +126,12 @@ export function AdminDashboard() {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const classes =
-    status === 'on-duty'
-      ? 'bg-[var(--success-50)] text-[var(--success-700)] border-[var(--success-100)]'
-      : status === 'off-duty'
-        ? 'bg-[var(--neutral-100)] text-[var(--neutral-600)] border-[var(--neutral-200)]'
-        : 'bg-[var(--warning-50)] text-[var(--warning-500)] border-[var(--warning-100)]';
-
-  return <span className={`text-xs capitalize px-2.5 py-1 rounded border ${classes}`}>{status.replace('-', ' ')}</span>;
+  const map: Record<string, { label: string; cls: string }> = {
+    'on-duty': { label: 'On Duty', cls: 'bg-[var(--success-50)] text-[var(--success-700)] border-[var(--success-100)]' },
+    'off-duty': { label: 'Off Duty', cls: 'bg-[var(--neutral-100)] text-[var(--neutral-600)] border-[var(--neutral-200)]' },
+    'break': { label: 'On Break', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+    'lunch': { label: 'Lunch Break', cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+  };
+  const { label, cls } = map[status] || { label: status, cls: 'bg-[var(--neutral-100)] text-[var(--neutral-600)] border-[var(--neutral-200)]' };
+  return <span className={`text-xs px-2.5 py-1 rounded border ${cls}`}>{label}</span>;
 }

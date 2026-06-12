@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { CheckCircle, Clock, FileText, FlaskConical, User, Send, Search } from 'lucide-react';
 import { useApp, Token } from '../context/AppContext';
 import { Button } from '../components/ui/button';
@@ -10,6 +10,8 @@ export function LabDashboard() {
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [reportNotes, setReportNotes] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  // Draft notes per token so they survive patient switching
+  const draftNotes = useRef<Record<string, string>>({});
 
   const filterTokens = (list: Token[]) => {
     if (!searchQuery.trim()) return list;
@@ -26,8 +28,18 @@ export function LabDashboard() {
   const selectedToken = tokens.find((t) => t.token === selectedTokenNumber);
 
   const handleSelectToken = (token: Token) => {
+    // Save current draft before switching
+    if (selectedTokenNumber) {
+      draftNotes.current[selectedTokenNumber] = reportNotes;
+    }
     setSelectedTokenNumber(token.token);
-    setReportNotes(token.labReportNotes || '');
+    // Restore draft for the new token, or use saved report notes
+    setReportNotes(draftNotes.current[token.token] ?? token.labReportNotes ?? '');
+  };
+
+  const handleNotesChange = (val: string) => {
+    setReportNotes(val);
+    if (selectedTokenNumber) draftNotes.current[selectedTokenNumber] = val;
   };
 
   const handleMarkTestDone = (testName: string) => {
@@ -264,7 +276,7 @@ export function LabDashboard() {
                 </label>
                 <textarea
                   value={reportNotes}
-                  onChange={(e) => setReportNotes(e.target.value)}
+                  onChange={(e) => handleNotesChange(e.target.value)}
                   placeholder="Enter lab findings, values, or report summary..."
                   rows={5}
                   disabled={selectedToken.labStatus === 'completed'}

@@ -68,17 +68,26 @@ export function ReturningPatientSearch() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      {/* Progress Bar */}
+      {/* Progress Steps */}
       <div className="text-center mb-6">
-        <div className="flex justify-center items-end gap-6 mb-3">
+        <div className="flex justify-center items-center gap-3 mb-3">
           {[
-            { label: 'Patient Type', active: true },
-            { label: 'Details', active: true },
-            { label: 'Doctor', active: false },
-          ].map((step) => (
-            <div key={step.label} className="flex flex-col items-center gap-1.5">
-              <div className={`w-16 h-2 rounded-full ${step.active ? 'bg-[var(--brand-500)]' : 'bg-[var(--neutral-200)]'}`} />
-              <span className={`text-[10px] font-medium ${step.active ? 'text-[var(--brand-600)]' : 'text-[var(--neutral-400)]'}`}>{step.label}</span>
+            { label: 'Patient Type', step: 1, done: true },
+            { label: 'Details', step: 2, done: false, active: true },
+            { label: 'Doctor', step: 3, done: false },
+          ].map((s, i) => (
+            <div key={s.label} className="flex items-center gap-3">
+              {i > 0 && <div className={`w-10 h-0.5 ${s.done || s.active ? 'bg-[var(--brand-400)]' : 'bg-[var(--neutral-200)]'}`} />}
+              <div className="flex flex-col items-center gap-1.5">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
+                  s.done ? 'bg-[var(--brand-500)] border-[var(--brand-500)] text-white'
+                  : s.active ? 'bg-white border-[var(--brand-500)] text-[var(--brand-600)]'
+                  : 'bg-white border-[var(--neutral-300)] text-[var(--neutral-400)]'
+                }`}>
+                  {s.done ? '✓' : s.step}
+                </div>
+                <span className={`text-[10px] font-medium ${s.active ? 'text-[var(--brand-600)]' : s.done ? 'text-[var(--brand-500)]' : 'text-[var(--neutral-400)]'}`}>{s.label}</span>
+              </div>
             </div>
           ))}
         </div>

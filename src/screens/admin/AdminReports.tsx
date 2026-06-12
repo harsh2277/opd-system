@@ -1,4 +1,5 @@
 import { Download, IndianRupee, Printer, TestTube2, TrendingUp } from 'lucide-react';
+import { Token } from '../../context/AppContext';
 import { Button } from '../../components/ui/button';
 import { useApp } from '../../context/AppContext';
 
@@ -79,18 +80,45 @@ export function AdminReports() {
           </div>
         </div>
 
-        <div className="bg-white border border-[var(--neutral-200)] rounded-lg p-5">
-          <h2 className="text-sm font-semibold text-[var(--neutral-900)] mb-4">Visit Trend</h2>
-          <div className="flex items-end gap-2 h-56 border-b border-[var(--neutral-200)]">
-            {[62, 88, 54, 78, 96, 72, 84].map((height, index) => (
-              <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                <div className="w-full bg-[var(--brand-100)] rounded-t" style={{ height: `${height}%` }} />
-                <span className="text-[10px] text-[var(--neutral-400)]">{['M', 'T', 'W', 'T', 'F', 'S', 'S'][index]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <VisitTrendChart tokens={tokens} />
       </div>
+    </div>
+  );
+}
+
+function VisitTrendChart({ tokens }: { tokens: Token[] }) {
+  const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const today = new Date();
+  // Build counts for the last 7 days (Sun=0 … Sat=6, remap to Mon-first)
+  const counts = Array(7).fill(0);
+  const labels: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    labels.push(DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1]);
+    const dayStr = d.toISOString().split('T')[0];
+    counts[6 - i] = tokens.filter(t => t.issuedAt.startsWith(dayStr)).length;
+  }
+  const maxCount = Math.max(...counts, 1);
+  return (
+    <div className="bg-white border border-[var(--neutral-200)] rounded-lg p-5">
+      <h2 className="text-sm font-semibold text-[var(--neutral-900)] mb-1">Visit Trend</h2>
+      <p className="text-[10px] text-[var(--neutral-400)] mb-4">Last 7 days — live data</p>
+      <div className="flex items-end gap-2 h-48 border-b border-[var(--neutral-200)]">
+        {counts.map((count, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+            {count > 0 && <span className="text-[9px] font-bold text-[var(--brand-700)]">{count}</span>}
+            <div
+              className={`w-full rounded-t transition-all ${count > 0 ? 'bg-[var(--brand-400)]' : 'bg-[var(--neutral-100)]'}`}
+              style={{ height: `${Math.max(4, (count / maxCount) * 100)}%` }}
+            />
+            <span className="text-[9px] text-[var(--neutral-400)]">{labels[i]}</span>
+          </div>
+        ))}
+      </div>
+      {maxCount === 1 && tokens.length === 0 && (
+        <p className="text-center text-xs text-[var(--neutral-400)] mt-3">No data yet — check back after patients are registered</p>
+      )}
     </div>
   );
 }

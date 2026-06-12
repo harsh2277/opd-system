@@ -25,6 +25,9 @@ export function BillingManagement() {
   const [tab, setTab] = useState<BillingTab>('pending');
   const [expandedToken, setExpandedToken] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<Record<string, PaymentMode>>({});
+  const [dateFilter, setDateFilter] = useState('');
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const getBillBreakdown = (token: Token) => {
     const consultationFee = token.isNewPatient ? 500 : 300;
@@ -58,12 +61,14 @@ export function BillingManagement() {
 
   const displayTokens = tab === 'pending' ? pendingTokens : tab === 'settled' ? settledTokens : allBillingTokens;
 
-  const filtered = displayTokens.filter(t =>
-    t.patient.name.toLowerCase().includes(query.toLowerCase()) ||
-    t.token.toLowerCase().includes(query.toLowerCase()) ||
-    t.patient.mobile.includes(query) ||
-    t.doctor.name.toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = displayTokens.filter(t => {
+    const matchQuery = t.patient.name.toLowerCase().includes(query.toLowerCase()) ||
+      t.token.toLowerCase().includes(query.toLowerCase()) ||
+      t.patient.mobile.includes(query) ||
+      t.doctor.name.toLowerCase().includes(query.toLowerCase());
+    const matchDate = !dateFilter || new Date(t.issuedAt).toISOString().split('T')[0] === dateFilter;
+    return matchQuery && matchDate;
+  });
 
   const totalPendingAmount = pendingTokens.reduce((sum, t) => sum + getPendingAmount(t), 0);
   const totalCollected = settledTokens.reduce((sum, t) => sum + getBillBreakdown(t).total, 0);
@@ -174,6 +179,17 @@ export function BillingManagement() {
               className="pl-9 text-xs h-9 border-[var(--neutral-200)]"
             />
           </div>
+          <input
+            type="date"
+            value={dateFilter}
+            max={todayStr}
+            onChange={e => setDateFilter(e.target.value)}
+            title="Filter by date"
+            className="h-9 px-3 text-xs border border-[var(--neutral-200)] rounded-md bg-white focus:outline-none focus:border-[var(--brand-400)] text-[var(--neutral-700)]"
+          />
+          {dateFilter && (
+            <button onClick={() => setDateFilter('')} className="text-xs text-[var(--brand-500)] hover:underline whitespace-nowrap">Clear date</button>
+          )}
           <div className="flex items-center gap-1 ml-auto">
             {tabs.map(t => (
               <button
