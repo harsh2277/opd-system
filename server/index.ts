@@ -14,6 +14,15 @@ const sql = neon(process.env.DATABASE_URL!);
 app.use(cors());
 app.use(express.json());
 
+// Catch malformed JSON bodies and respond with clean JSON instead of an HTML
+// stack trace (express.json throws a SyntaxError with a `body` property).
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Invalid JSON in request body' });
+  }
+  next(err);
+});
+
 // API health endpoint
 app.get('/api/health', async (req, res) => {
   try {
@@ -237,6 +246,10 @@ app.post('/api/tokens', async (req, res) => {
   const actualTokenNumber = tokenNumber || token;
   const tokenId = id || `TOK-${Date.now()}`;
 
+  if (!actualTokenNumber) {
+    return res.status(400).json({ error: 'tokenNumber is required' });
+  }
+
   try {
     // Helper to format JS array to standard PG array format e.g. '{val1,val2}'
     const formatPgArray = (arr: string[]) => {
@@ -258,28 +271,30 @@ app.post('/api/tokens', async (req, res) => {
     const pConditions = formatPgArray(patient?.selectedConditions);
     const pAddress = patient?.address || null;
 
-    await sql`
-      INSERT INTO patients (id, name, age, gender, mobile, blood_group, selected_conditions, address, last_visit)
-      VALUES (${patientId}, ${pName}, ${pAge}, ${pGender}, ${pMobile}, ${pBloodGroup}, ${pConditions}, ${pAddress}, NOW())
-      ON CONFLICT (id) DO UPDATE 
-      SET last_visit = NOW();
-    `;
-
-    // 2. Insert Token
-    const result = await sql`
-      INSERT INTO tokens (
-        id, token_number, patient_id, patient_name, patient_age, patient_gender, patient_mobile, patient_blood_group, patient_selected_conditions, patient_address,
-        doctor_id, status, urgent, vitals, is_new_patient, issued_at,
-        billing_status, billing_amount, consultation_paid, payment_method
-      )
-      VALUES (
-        ${tokenId}, ${actualTokenNumber}, ${patientId}, ${pName}, ${pAge}, ${pGender}, ${pMobile}, ${pBloodGroup}, ${pConditions}, ${pAddress},
-        ${doctor?.id || null}, 'waiting', ${urgent || false}, ${vitals ? JSON.stringify(vitals) : null}, ${isNewPatient || false}, NOW(),
-        ${billingStatus || 'pending'}, ${billingAmount || 0}, ${consultationPaid || false}, ${paymentMethod || null}
-      )
-      RETURNING *
-    `;
-    res.status(201).json(result[0]);
+    // Patient-upsert + token-insert run atomically in a single transaction so a
+    // failure on the token insert can never leave an orphaned patient row behind.
+    const [, tokenRows] = await sql.transaction([
+      sql`
+        INSERT INTO patients (id, name, age, gender, mobile, blood_group, selected_conditions, address, last_visit)
+        VALUES (${patientId}, ${pName}, ${pAge}, ${pGender}, ${pMobile}, ${pBloodGroup}, ${pConditions}, ${pAddress}, NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET last_visit = NOW();
+      `,
+      sql`
+        INSERT INTO tokens (
+          id, token_number, patient_id, patient_name, patient_age, patient_gender, patient_mobile, patient_blood_group, patient_selected_conditions, patient_address,
+          doctor_id, doctor_name, status, urgent, vitals, is_new_patient, issued_at,
+          billing_status, billing_amount, consultation_paid, payment_method
+        )
+        VALUES (
+          ${tokenId}, ${actualTokenNumber}, ${patientId}, ${pName}, ${pAge}, ${pGender}, ${pMobile}, ${pBloodGroup}, ${pConditions}, ${pAddress},
+          ${doctor?.id || null}, ${doctor?.name || null}, 'waiting', ${urgent || false}, ${vitals ? JSON.stringify(vitals) : null}, ${isNewPatient || false}, NOW(),
+          ${billingStatus || 'pending'}, ${billingAmount || 0}, ${consultationPaid || false}, ${paymentMethod || null}
+        )
+        RETURNING *
+      `,
+    ]);
+    res.status(201).json((tokenRows as any[])[0]);
   } catch (error: any) {
     console.error('Token create error:', error);
     res.status(500).json({ error: 'Internal Server Error', message: error.message || String(error) });
@@ -303,17 +318,24 @@ app.patch('/api/tokens/:tokenNumber', async (req, res) => {
     const called_at = updates.calledAt !== undefined ? (updates.calledAt ? new Date(updates.calledAt) : null) : t.called_at;
     const sms_sent_at = updates.smsSentAt !== undefined ? (updates.smsSentAt ? new Date(updates.smsSentAt) : null) : t.sms_sent_at;
     const urgent = updates.urgent !== undefined ? updates.urgent : t.urgent;
-    const prescription = updates.prescription !== undefined ? JSON.stringify(updates.prescription) : t.prescription;
+    // For JSONB columns: always stringify incoming JS values so we pass consistent strings.
+    // The neon JSONB column will parse them on storage; the DB returns them as objects on SELECT.
+    const toJsonb = (incoming: any, fallback: any) =>
+      incoming !== undefined ? JSON.stringify(incoming) : (typeof fallback === 'object' && fallback !== null ? JSON.stringify(fallback) : fallback);
+
+    const prescription = toJsonb(updates.prescription, t.prescription);
     const prescription_status = updates.prescriptionStatus !== undefined ? updates.prescriptionStatus : t.prescription_status;
     const billing_status = updates.billingStatus !== undefined ? updates.billingStatus : t.billing_status;
     const billing_amount = updates.billingAmount !== undefined ? updates.billingAmount : t.billing_amount;
-    const vitals = updates.vitals !== undefined ? JSON.stringify(updates.vitals) : t.vitals;
+    const vitals = toJsonb(updates.vitals, t.vitals);
     const pharmacy_sent_at = updates.pharmacySentAt !== undefined ? (updates.pharmacySentAt ? new Date(updates.pharmacySentAt) : null) : t.pharmacy_sent_at;
-    const lab_tests = updates.labTests !== undefined ? JSON.stringify(updates.labTests) : t.lab_tests;
+    const lab_tests = toJsonb(updates.labTests, t.lab_tests);
     const lab_status = updates.labStatus !== undefined ? updates.labStatus : t.lab_status;
     const lab_requested_at = updates.labRequestedAt !== undefined ? (updates.labRequestedAt ? new Date(updates.labRequestedAt) : null) : t.lab_requested_at;
     const lab_completed_at = updates.labCompletedAt !== undefined ? (updates.labCompletedAt ? new Date(updates.labCompletedAt) : null) : t.lab_completed_at;
     const lab_report_notes = updates.labReportNotes !== undefined ? updates.labReportNotes : t.lab_report_notes;
+    const diagnosis = updates.diagnosis !== undefined ? updates.diagnosis : t.diagnosis;
+    const notes = updates.notes !== undefined ? updates.notes : t.notes;
     const consultation_paid = updates.consultationPaid !== undefined ? updates.consultationPaid : t.consultation_paid;
     const prescription_paid = updates.prescriptionPaid !== undefined ? updates.prescriptionPaid : t.prescription_paid;
     const lab_paid = updates.labPaid !== undefined ? updates.labPaid : t.lab_paid;
@@ -337,6 +359,8 @@ app.patch('/api/tokens/:tokenNumber', async (req, res) => {
         lab_requested_at = ${lab_requested_at},
         lab_completed_at = ${lab_completed_at},
         lab_report_notes = ${lab_report_notes},
+        diagnosis = ${diagnosis},
+        notes = ${notes},
         consultation_paid = ${consultation_paid},
         prescription_paid = ${prescription_paid},
         lab_paid = ${lab_paid},
@@ -435,6 +459,13 @@ app.delete('/api/notifications', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Internal Server Error' });
   }
+});
+
+// Final catch-all error handler: never leak stack traces / file paths to clients.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
 app.listen(PORT, () => {

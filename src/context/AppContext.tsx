@@ -62,7 +62,7 @@ export interface Token {
   patient: Patient;
   doctor: Doctor;
   issuedAt: string;
-  status: 'waiting' | 'in-consultation' | 'done' | 'skipped';
+  status: 'waiting' | 'in-consultation' | 'done' | 'skipped' | 'lab-pending';
   calledAt?: string;
   smsSentAt?: string;
   urgent: boolean;
@@ -77,6 +77,8 @@ export interface Token {
   labRequestedAt?: string;
   labCompletedAt?: string;
   labReportNotes?: string;
+  diagnosis?: string;
+  notes?: string;
   isNewPatient?: boolean;
   consultationPaid?: boolean;
   prescriptionPaid?: boolean;
@@ -102,7 +104,7 @@ interface AppContextType {
   appointments: Appointment[];
   addToken: (token: Token) => Promise<boolean>;
   addDoctor: (doctor: Doctor) => void;
-  updateTokenStatus: (tokenNumber: string, status: Token['status']) => void;
+  updateTokenStatus: (tokenNumber: string, status: Token['status']) => Promise<void>;
   updateDoctorStatus: (doctorId: string, status: Doctor['status']) => void;
   markTokenUrgent: (tokenNumber: string) => void;
   startSession: () => void;
@@ -113,14 +115,15 @@ interface AppContextType {
   addPrescription: (tokenNumber: string, medicines: Medicine[]) => void;
   dispensePrescription: (tokenNumber: string, updatedMedicines: Medicine[], amount: number) => void;
   settleBilling: (tokenNumber: string, consultationPaid: boolean, prescriptionPaid: boolean, labPaid: boolean, amount: number, paymentMethod?: 'upi' | 'cash' | 'card') => void;
-  requestLabTests: (tokenNumber: string, tests: LabTestRequest[]) => void;
-  completeLabRequest: (tokenNumber: string, reportNotes: string) => void;
-  updateLabTest: (tokenNumber: string, testName: string) => void;
+  requestLabTests: (tokenNumber: string, tests: LabTestRequest[]) => Promise<void>;
+  completeLabRequest: (tokenNumber: string, reportNotes: string) => Promise<void>;
+  updateLabTest: (tokenNumber: string, testName: string) => Promise<void>;
   addNotification: (text: string, type?: Notification['type']) => void;
   clearNotifications: () => void;
   markNotificationsAsRead: () => void;
-  saveVitals: (tokenNumber: string, vitals: { bp: string; temp: string; pulse: string; weight: string }) => void;
-  sendToPharmacy: (tokenNumber: string, medicines: Medicine[]) => void;
+  saveVitals: (tokenNumber: string, vitals: { bp: string; temp: string; pulse: string; weight: string }) => Promise<void>;
+  saveConsultationNotes: (tokenNumber: string, diagnosis: string, notes: string) => Promise<void>;
+  sendToPharmacy: (tokenNumber: string, medicines: Medicine[]) => Promise<void>;
   savePrescriptionTemplate: (name: string, medicines: Medicine[]) => void;
   deletePrescriptionTemplate: (id: string) => void;
   addAppointment: (appt: Omit<Appointment, 'id' | 'createdAt'>) => void;
@@ -210,7 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             selectedConditions: t.patient_selected_conditions || [],
             address: t.patient_address
           },
-          doctor: mappedDoctors.find((d: any) => d.id === t.doctor_id) || { id: t.doctor_id, name: 'Doctor', specialty: '', queue: 0, avgWait: 15, status: 'on-duty' },
+          doctor: mappedDoctors.find((d: any) => d.id === t.doctor_id) || { id: t.doctor_id, name: t.doctor_name || 'Doctor', specialty: '', queue: 0, avgWait: 15, status: 'on-duty' },
           issuedAt: t.issued_at,
           status: t.status,
           calledAt: t.called_at,
@@ -227,6 +230,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           labRequestedAt: t.lab_requested_at,
           labCompletedAt: t.lab_completed_at,
           labReportNotes: t.lab_report_notes,
+          diagnosis: t.diagnosis,
+          notes: t.notes,
           isNewPatient: t.is_new_patient,
           consultationPaid: t.consultation_paid,
           prescriptionPaid: t.prescription_paid,
@@ -381,7 +386,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addPrescription = async (tokenNumber: string, medicines: Medicine[]) => {
-    const billingAmount = medicines.reduce((acc, m) => acc + 150, 0);
+    const billingAmount = medicines.length * 150;
     try {
       const response = await fetch(`/api/tokens/${tokenNumber}`, {
         method: 'PATCH',
@@ -517,7 +522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   ...token,
                   labTests: tests,
                   labStatus: 'pending',
-                  labRequestedAt: token.labRequestedAt || labRequestedAt,
+                  labRequestedAt,
                   labCompletedAt: undefined,
                   labReportNotes: undefined,
                 }
@@ -541,28 +546,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
 
     try {
+      const returnToDoctor = token.status === 'lab-pending';
+      const body: Record<string, unknown> = {
+        labStatus: 'completed',
+        labCompletedAt: completedAt,
+        labReportNotes: reportNotes,
+        labTests,
+      };
+      if (returnToDoctor) body.status = 'waiting';
+
       const response = await fetch(`/api/tokens/${tokenNumber}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          labStatus: 'completed',
-          labCompletedAt: completedAt,
-          labReportNotes: reportNotes,
-          labTests
-        })
+        body: JSON.stringify(body),
       });
       if (response.ok) {
         setTokens((prev) =>
-          prev.map((token) =>
-            token.token === tokenNumber
+          prev.map((t) =>
+            t.token === tokenNumber
               ? {
-                  ...token,
+                  ...t,
                   labStatus: 'completed',
                   labCompletedAt: completedAt,
                   labReportNotes: reportNotes,
                   labTests,
+                  ...(returnToDoctor ? { status: 'waiting' as const } : {}),
                 }
-              : token
+              : t
           )
         );
       }
@@ -578,28 +588,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updatedTests = (token.labTests || []).map(t =>
       t.name === testName ? { ...t, status: 'completed' as const, completedAt: now } : t
     );
-    const allDone = updatedTests.every(t => t.status === 'completed');
-
     try {
+      // Only update the individual test statuses — never promote labStatus to 'completed' here.
+      // Only completeLabRequest (triggered by the lab staff submitting report notes) may do that.
       const response = await fetch(`/api/tokens/${tokenNumber}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          labTests: updatedTests,
-          labStatus: allDone ? 'completed' : 'pending',
-          labCompletedAt: allDone ? now : undefined,
-        })
+        body: JSON.stringify({ labTests: updatedTests })
       });
       if (response.ok) {
         setTokens((prev) =>
           prev.map((t) => {
             if (t.token !== tokenNumber) return t;
-            return {
-              ...t,
-              labTests: updatedTests,
-              labStatus: allDone ? 'completed' : 'pending',
-              labCompletedAt: allDone ? now : undefined,
-            };
+            return { ...t, labTests: updatedTests };
           })
         );
       }
@@ -707,6 +708,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const saveConsultationNotes = async (tokenNumber: string, diagnosis: string, notes: string) => {
+    try {
+      const response = await fetch(`/api/tokens/${tokenNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diagnosis, notes })
+      });
+      if (response.ok) {
+        setTokens(prev =>
+          prev.map(token =>
+            token.token === tokenNumber ? { ...token, diagnosis, notes } : token
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const sendToPharmacy = async (tokenNumber: string, medicines: Medicine[]) => {
     const pharmacySentAt = new Date().toISOString();
     try {
@@ -803,7 +823,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSessionStartTime(new Date());
   };
 
-  const endSession = () => {
+  const endSession = async () => {
+    // Return any in-consultation token back to waiting before ending the session
+    const inConsultToken = tokens.find(t => t.status === 'in-consultation');
+    if (inConsultToken) {
+      await updateTokenStatus(inConsultToken.token, 'waiting');
+    }
     setTokens(prev =>
       prev.map(t => t.status === 'in-consultation' ? { ...t, status: 'waiting', calledAt: undefined } : t)
     );
@@ -850,6 +875,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearNotifications,
         markNotificationsAsRead,
         saveVitals,
+        saveConsultationNotes,
         sendToPharmacy,
         savePrescriptionTemplate,
         deletePrescriptionTemplate,

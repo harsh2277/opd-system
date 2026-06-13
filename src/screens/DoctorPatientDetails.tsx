@@ -1,182 +1,86 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  User,
-  Phone,
-  Droplet,
-  FileText,
-  Clock,
-  AlertCircle,
-  Save,
-  Trash2,
-  Activity,
-  Plus,
-  Send,
-  Pill,
-  X,
-  CheckCircle2,
-  Stethoscope,
-  LogOut,
-  FlaskConical,
+  ArrowLeft, User, FileText, Clock, AlertCircle, Trash2, Plus,
+  Pill, X, CheckCircle2, Stethoscope, LogOut, FlaskConical, ChevronRight,
+  Activity, Heart, Thermometer, Weight, Droplet, Save, ChevronDown, ChevronUp,
+  ArrowRight, ClipboardList,
 } from 'lucide-react';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 import { getPatientHistory } from '../data/dummyPatientHistory';
-import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { DoctorLayout } from '../components/DoctorLayout';
 
-interface ConsultationNote {
-  id: string;
-  date: string;
-  doctor: string;
-  specialty?: string;
-  diagnosis: string;
-  prescription: string;
-  notes: string;
+/* ─── Types ─── */
+interface Medicine { name: string; dosage: string; duration: string; instructions: string; }
+interface LabEntry { name: string; notes: string; }
+interface HistoryNote {
+  id: string; date: string; doctor: string; specialty?: string;
+  diagnosis: string; prescription: string; notes: string;
   vitals?: { bp: string; temp: string; pulse: string; weight: string };
   labTests?: string;
 }
 
-interface Medicine {
-  name: string;
-  dosage: string;
-  duration: string;
-  instructions: string;
-}
-
-const MEDICINE_SUGGESTIONS = [
-  'Paracetamol 650mg',
-  'Amoxicillin 500mg',
-  'Ibuprofen 400mg',
-  'Cetirizine 10mg',
-  'Pantoprazole 40mg',
-  'Metformin 500mg',
-  'Azithromycin 500mg',
-  'Cough Syrup (Ascoril)',
-  'Multivitamin Capsule'
+/* ─── Static data ─── */
+const MED_NAMES = [
+  'Paracetamol 650mg', 'Amoxicillin 500mg', 'Ibuprofen 400mg', 'Cetirizine 10mg',
+  'Pantoprazole 40mg', 'Metformin 500mg', 'Azithromycin 500mg', 'Omeprazole 20mg',
+  'Atorvastatin 10mg', 'Amlodipine 5mg', 'Cough Syrup (Ascoril)', 'Multivitamin Capsule',
+  'Doxycycline 100mg', 'Levofloxacin 500mg', 'Prednisolone 10mg', 'Montelukast 10mg',
+];
+const DOSAGES = [
+  '1-0-1 (Morning & Night)', '1-0-0 (Morning only)', '1-1-1 (Three times daily)',
+  '0-0-1 (Night only)', '1-1-0 (Morning & Afternoon)', 'Once daily', 'SOS (as needed)',
+];
+const DURATIONS = ['3 days', '5 days', '7 days', '10 days', '14 days', '1 month', '3 months'];
+const LAB_TESTS = [
+  'CBC (Complete Blood Count)', 'Blood Sugar - Fasting', 'Blood Sugar - Post Prandial',
+  'HbA1c', 'Lipid Profile', 'Liver Function Test (LFT)', 'Kidney Function Test (KFT)',
+  'Thyroid Profile (T3/T4/TSH)', 'Urine Routine & Microscopy', 'Dengue NS1 / IgM',
+  'Malaria Parasite Smear', 'X-Ray Chest (PA View)', 'ECG (12 Lead)',
+  'Ultrasound Abdomen', 'Serum Electrolytes', 'ESR', 'CRP', '2D Echo',
 ];
 
-const DOSAGE_SUGGESTIONS = [
-  '1-0-1 (Morning & Night)',
-  '1-0-0 (Morning only)',
-  '1-1-1 (Three times a day)',
-  '0-0-1 (Night only)',
-  '1-1-0 (Morning & Afternoon)',
-  'Once daily',
-  'As needed (SOS)'
-];
-
-const DURATION_SUGGESTIONS = [
-  '3 days',
-  '5 days',
-  '7 days',
-  '10 days',
-  '14 days',
-  '1 month',
-  '3 months'
-];
-
-const LAB_TEST_SUGGESTIONS = [
-  'CBC (Complete Blood Count)',
-  'Blood Sugar - Fasting',
-  'Blood Sugar - PP',
-  'HbA1c',
-  'Lipid Profile',
-  'Liver Function Test',
-  'Kidney Function Test',
-  'Thyroid Profile',
-  'Urine Routine',
-  'Dengue NS1 / IgM',
-  'Malaria Parasite Smear',
-  'X-Ray Chest',
-  'ECG',
-  'Ultrasound Abdomen'
-];
-
-interface SearchableDropdownProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: string[];
-  placeholder: string;
-  className?: string;
-}
-
-function SearchableDropdown({ value, onChange, options, placeholder, className = '' }: SearchableDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
-
-  // Update search when value changes from outside (e.g. cleared)
-  useEffect(() => {
-    setSearch(value);
-  }, [value]);
-
-  const filtered = options.filter(opt =>
-    opt.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleSelect = (opt: string) => {
-    onChange(opt);
-    setSearch(opt);
-    setIsOpen(false);
-  };
-
-  const handleCustomAdd = () => {
-    if (search.trim()) {
-      onChange(search.trim());
-      setIsOpen(false);
-    }
-  };
+/* ─── Searchable dropdown ─── */
+function Dropdown({ value, onChange, options, placeholder, className = '' }: {
+  value: string; onChange: (v: string) => void; options: string[];
+  placeholder: string; className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { setQ(value); }, [value]);
+  const filtered = options.filter(o => o.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div className={`relative flex-1 ${className}`}>
+    <div ref={ref} className={`relative ${className}`}>
       <input
-        type="text"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          onChange(e.target.value);
-          setIsOpen(true);
-        }}
-        onFocus={() => setIsOpen(true)}
+        value={q}
+        onChange={e => { setQ(e.target.value); onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
         placeholder={placeholder}
-        className="w-full h-9 px-3 text-xs border border-[var(--neutral-200)] rounded-md bg-white focus:outline-none focus:border-[var(--brand-500)] text-[var(--neutral-800)] placeholder-[var(--neutral-400)]"
+        className="w-full h-9 px-3 text-xs border border-[var(--neutral-200)] rounded-lg bg-white focus:outline-none focus:border-[var(--brand-400)] placeholder-[var(--neutral-400)]"
       />
-      {isOpen && (
+      {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-auto bg-white border border-[var(--neutral-200)] rounded-md shadow-none z-20 py-1">
-            {filtered.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => handleSelect(opt)}
-                className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--neutral-100)] text-[var(--neutral-700)] focus:outline-none"
-              >
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-auto bg-white border border-[var(--neutral-200)] rounded-xl shadow-lg z-20 py-1">
+            {filtered.map(opt => (
+              <button key={opt} type="button" onClick={() => { onChange(opt); setQ(opt); setOpen(false); }}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--neutral-50)] text-[var(--neutral-700)]">
                 {opt}
               </button>
             ))}
-            {search.trim() && !options.includes(search) && (
-              <button
-                type="button"
-                onClick={handleCustomAdd}
-                className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--brand-50)] text-[var(--brand-600)] font-medium border-t border-[var(--neutral-100)] focus:outline-none"
-              >
-                + Use custom: "{search}"
+            {q.trim() && !options.find(o => o.toLowerCase() === q.toLowerCase()) && (
+              <button type="button" onClick={() => { onChange(q.trim()); setOpen(false); }}
+                className="w-full text-left px-3 py-2 text-xs text-[var(--brand-600)] font-semibold border-t border-[var(--neutral-100)] hover:bg-[var(--brand-50)]">
+                + Use "{q}"
               </button>
-            )}
-            {filtered.length === 0 && !search.trim() && (
-              <div className="px-3 py-2 text-xs text-[var(--neutral-400)] text-center">No options available</div>
             )}
           </div>
         </>
@@ -185,886 +89,761 @@ function SearchableDropdown({ value, onChange, options, placeholder, className =
   );
 }
 
+/* ════════════════════════════════════════════════════
+   Main Component
+   ════════════════════════════════════════════════════ */
 export function DoctorPatientDetails() {
   const navigate = useNavigate();
   const { tokenId } = useParams();
-  const { tokens, updateTokenStatus, updateDoctorStatus, addPrescription, requestLabTests, addNotification, prescriptionTemplates, savePrescriptionTemplate, deletePrescriptionTemplate, saveVitals, sendToPharmacy } = useApp();
+  const {
+    tokens, updateTokenStatus,
+    requestLabTests, addNotification,
+    prescriptionTemplates, savePrescriptionTemplate, deletePrescriptionTemplate,
+    saveVitals, sendToPharmacy, saveConsultationNotes,
+  } = useApp();
+
   const [token, setToken] = useState<any>(null);
-  const [currentDoctor, setCurrentDoctor] = useState<any>(null);
-  const [history, setHistory] = useState<ConsultationNote[]>([]);
-  const [note, setNote] = useState({ diagnosis: '', notes: '' });
+  const [doctor, setDoctor] = useState<any>(null);
+  const [history, setHistory] = useState<HistoryNote[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Consultation fields
+  const [diagnosis, setDiagnosis] = useState('');
+  const [notes, setNotes] = useState('');
   const [vitals, setVitals] = useState({ bp: '', temp: '', pulse: '', weight: '' });
+
+  // Prescription
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [newMed, setNewMed] = useState<Medicine>({ name: '', dosage: '', duration: '', instructions: '' });
-  const [labTests, setLabTests] = useState<string[]>([]);
-  const [newLabTest, setNewLabTest] = useState('');
-  const [labNotes, setLabNotes] = useState('');
-  const [labSent, setLabSent] = useState(false);
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [templateName, setTemplateName] = useState('');
+  const [tplName, setTplName] = useState('');
 
-  const handleUpdateStatus = (status: 'on-duty' | 'off-duty' | 'break' | 'lunch') => {
-    if (currentDoctor) {
-      const updatedDoc = { ...currentDoctor, status };
-      setCurrentDoctor(updatedDoc);
-      localStorage.setItem('current-doctor', JSON.stringify(updatedDoc));
-      updateDoctorStatus(currentDoctor.id, status);
-      toast.success(`Status updated to ${status === 'on-duty' ? 'Active' : status}`);
-    }
-  };
+  // Lab tests (initial consultation only)
+  const [labTests, setLabTests] = useState<LabEntry[]>([]);
+  const [newTest, setNewTest] = useState('');
+  const [newTestNotes, setNewTestNotes] = useState('');
+  const [labSent, setLabSent] = useState(false);
+
+  const [unsavedDialog, setUnsavedDialog] = useState(false);
+  const labInitialized = useRef(false);
+  // Track if prescription was already sent to pharmacy in this session (prevents double-send)
+  const pharmacySentThisSession = useRef(false);
 
   useEffect(() => {
-    const doc = localStorage.getItem('current-doctor');
-    let parsedDoctor = null;
-    if (doc) {
-      parsedDoctor = JSON.parse(doc);
-      setCurrentDoctor(parsedDoctor);
-    }
+    const docData = localStorage.getItem('current-doctor');
+    let parsedDoc: any = null;
+    if (docData) { parsedDoc = JSON.parse(docData); setDoctor(parsedDoc); }
 
-    const found = tokens.find((t) => t.id === tokenId);
-    if (!found) {
-      toast.error('Patient not found');
-      navigate('/doctor-dashboard');
-      return;
-    }
-
-    // Ownership guard: prevent doctors from accessing other doctors' patients
-    if (parsedDoctor && found.doctor.id !== parsedDoctor.id) {
-      toast.error('This patient is not assigned to you');
-      navigate('/doctor-dashboard');
-      return;
+    const found = tokens.find(t => t.id === tokenId);
+    if (!found) { toast.error('Patient not found'); navigate('/doctor-dashboard'); return; }
+    if (parsedDoc && found.doctor.id !== parsedDoc.id) {
+      toast.error('Patient not assigned to you'); navigate('/doctor-dashboard'); return;
     }
 
     setToken(found);
-    setLabTests((found.labTests || []).map((test: { name: string }) => test.name));
-    setLabNotes((found.labTests || [])[0]?.notes || '');
+    if (!labInitialized.current) {
+      setLabTests((found.labTests || []).map((t: any) => ({ name: t.name, notes: t.notes || '' })));
+      labInitialized.current = true;
+    }
     setLabSent(found.labStatus === 'pending' || found.labStatus === 'completed');
 
     const saved = localStorage.getItem(`patient-history-${found.patient.mobile}`);
-    const savedHistory: ConsultationNote[] = saved ? JSON.parse(saved) : [];
-    const dummy = getPatientHistory(found.patient.mobile) as ConsultationNote[];
-    setHistory([...savedHistory, ...dummy]);
+    const savedArr: HistoryNote[] = saved ? JSON.parse(saved) : [];
+    const dummy = getPatientHistory(found.patient.mobile) as HistoryNote[];
+    setHistory([...savedArr, ...dummy]);
   }, [tokenId, tokens, navigate]);
 
-  const handleAddMedicine = () => {
-    if (!newMed.name || !newMed.dosage) {
-      toast.error('Name and dosage required');
-      return;
-    }
-    setMedicines([...medicines, newMed]);
-    setNewMed({ name: '', dosage: '', duration: '', instructions: '' });
+  if (!token) return null;
+
+  const isActive    = token.status === 'in-consultation';
+  const isLabReturn = token.labStatus === 'completed' && token.status === 'in-consultation';
+  const labPending  = labTests.length > 0 && !labSent;
+
+  /* ── Navigation helper ── */
+  const goNext = async () => {
+    const next = tokens.find(t => t.doctor.id === doctor?.id && t.status === 'waiting' && t.id !== token.id);
+    if (next) { await updateTokenStatus(next.token, 'in-consultation'); navigate(`/doctor-patient/${next.id}`); toast.info(`Next: ${next.patient.name}`); }
+    else navigate('/doctor-dashboard');
   };
 
-  const handleSendToPharmacy = () => {
-    if (medicines.length === 0) {
-      toast.error('Add medicines first');
-      return;
-    }
-    if (token.pharmacySentAt) {
-      toast.error('Prescription already sent to pharmacy');
-      return;
-    }
-    sendToPharmacy(token.token, medicines);
-    toast.success(`${medicines.length} medicine(s) sent to pharmacy`);
-  };
-
-  const handleAddLabTest = () => {
-    const testName = newLabTest.trim();
-    if (!testName) {
-      toast.error('Select a lab test first');
-      return;
-    }
-    if (labTests.includes(testName)) {
-      toast.error('This lab test is already added');
-      return;
-    }
-    setLabTests([...labTests, testName]);
-    setNewLabTest('');
-    setLabSent(false);
-  };
-
-  const handleSendToLab = () => {
-    if (!token) return;
-    if (labTests.length === 0) {
-      toast.error('Add at least one lab test');
-      return;
-    }
-    requestLabTests(
-      token.token,
-      labTests.map((name) => ({ name, notes: labNotes }))
-    );
-    addNotification(
-      `Lab request sent for ${token.patient.name} (${token.token}) - ${labTests.length} test(s)`,
-      'info'
-    );
-    setLabSent(true);
-    toast.success(`${labTests.length} lab test(s) sent to lab`);
-  };
-
-  const handleSaveAndComplete = () => {
-    if (!note.diagnosis) {
-      toast.error('Diagnosis is required');
-      return;
-    }
-    const entry: ConsultationNote = {
-      id: String(Date.now()),
-      date: new Date().toISOString(),
-      doctor: currentDoctor?.name || 'Doctor',
-      diagnosis: note.diagnosis,
-      prescription: medicines
-        .map((m, i) => `${i + 1}. ${m.name} ${m.dosage}${m.duration ? ` · ${m.duration}` : ''}${m.instructions ? ` (${m.instructions})` : ''}`)
-        .join('\n'),
-      notes: note.notes,
+  /* ── Save everything and advance (async — awaits all PATCHes before status update) ── */
+  const saveConsultation = async () => {
+    const entry: HistoryNote = {
+      id: String(Date.now()), date: new Date().toISOString(),
+      doctor: doctor?.name || 'Doctor',
+      diagnosis,
+      prescription: medicines.map((m, i) =>
+        `${i + 1}. ${m.name} ${m.dosage}${m.duration ? ` · ${m.duration}` : ''}${m.instructions ? ` (${m.instructions})` : ''}`
+      ).join('\n'),
+      notes,
       vitals: vitals.bp || vitals.temp || vitals.pulse || vitals.weight ? { ...vitals } : undefined,
-      labTests: labTests.length > 0 ? labTests.map((test, i) => `${i + 1}. ${test}`).join('\n') : undefined,
+      labTests: (token.labTests || []).length > 0
+        ? (token.labTests || []).map((t: any, i: number) => `${i + 1}. ${t.name}${t.notes ? ` — ${t.notes}` : ''}`).join('\n')
+        : undefined,
     };
     const updated = [entry, ...history];
     setHistory(updated);
     localStorage.setItem(`patient-history-${token.patient.mobile}`, JSON.stringify(updated));
-    setNote({ diagnosis: '', notes: '' });
-    setVitals({ bp: '', temp: '', pulse: '', weight: '' });
-    setMedicines([]);
-    
-    if (vitals.bp || vitals.temp || vitals.pulse || vitals.weight) {
-      saveVitals(token.token, { ...vitals });
+
+    // Persist diagnosis and notes to backend
+    if (diagnosis.trim() || notes.trim()) {
+      await saveConsultationNotes(token.token, diagnosis.trim(), notes.trim());
     }
 
-    if (medicines.length > 0 && !token.pharmacySentAt) {
-      addPrescription(token.token, medicines);
-      toast.success(`${medicines.length} medicine(s) sent to pharmacy`);
+    if (vitals.bp || vitals.temp || vitals.pulse || vitals.weight) {
+      await saveVitals(token.token, { ...vitals });
+    }
+
+    if (medicines.length > 0 && !pharmacySentThisSession.current) {
+      // On lab return, always send a fresh prescription even if one was sent before.
+      // On initial consultation, skip if already sent (e.g. via the inline "Send Now" button).
+      const alreadySent = !isLabReturn && token.pharmacySentAt;
+      if (!alreadySent) {
+        pharmacySentThisSession.current = true;
+        await sendToPharmacy(token.token, medicines);
+        toast.success(`${medicines.length} medicine(s) sent to pharmacy`);
+      }
     }
 
     if (labTests.length > 0 && !labSent) {
-      requestLabTests(
-        token.token,
-        labTests.map((name) => ({ name, notes: labNotes }))
-      );
-      addNotification(
-        `Lab request sent for ${token.patient.name} (${token.token}) - ${labTests.length} test(s)`,
-        'info'
-      );
-      toast.success(`${labTests.length} lab test(s) sent to lab`);
+      await requestLabTests(token.token, labTests.map(t => ({ name: t.name, notes: t.notes })));
+      addNotification(`Lab request: ${token.patient.name} (${token.token}) — ${labTests.length} test(s)`, 'info');
     }
-    
-    updateTokenStatus(token.token, 'done');
-    toast.success('Consultation saved and completed');
+  };
 
-    // Call next patient if queue is not empty
-    const nextToken = tokens.find(
-      (t) => t.doctor.id === currentDoctor?.id && t.status === 'waiting' && t.id !== token.id
-    );
-    if (nextToken) {
-      updateTokenStatus(nextToken.token, 'in-consultation');
-      navigate(`/doctor-patient/${nextToken.id}`);
-      toast.info(`Next patient called: ${nextToken.patient.name}`);
-    } else {
+  const handleComplete = async () => {
+    if (!diagnosis.trim()) { toast.error('Enter a diagnosis before completing'); return; }
+    await saveConsultation();
+    if (labPending) {
+      await updateTokenStatus(token.token, 'lab-pending');
+      toast.success('Patient sent to lab — results will return to your queue');
       navigate('/doctor-dashboard');
-    }
-  };
-
-  const hasUnsavedWork = medicines.length > 0 || note.diagnosis.trim() !== '';
-
-  const handleComplete = () => {
-    if (note.diagnosis.trim()) {
-      handleSaveAndComplete();
-    } else if (medicines.length > 0) {
-      // Medicines added but no diagnosis — warn before discarding
-      setShowUnsavedDialog(true);
     } else {
-      doCompleteWithoutSaving();
+      await updateTokenStatus(token.token, 'done');
+      toast.success(medicines.length > 0 ? 'Consultation complete — prescription sent to pharmacy' : 'Consultation complete');
+      goNext();
     }
   };
 
-  const doCompleteWithoutSaving = () => {
-    updateTokenStatus(token.token, 'done');
-    toast.success('Consultation completed');
-    const nextToken = tokens.find(
-      (t) => t.doctor.id === currentDoctor?.id && t.status === 'waiting' && t.id !== token.id
-    );
-    if (nextToken) {
-      updateTokenStatus(nextToken.token, 'in-consultation');
-      navigate(`/doctor-patient/${nextToken.id}`);
-      toast.info(`Next patient called: ${nextToken.patient.name}`);
-    } else {
-      navigate('/doctor-dashboard');
-    }
+  const handleCompleteNoSave = async () => {
+    const lp = token.labTests?.length > 0 && token.labStatus !== 'completed';
+    await updateTokenStatus(token.token, lp ? 'lab-pending' : 'done');
+    goNext();
   };
 
-  const handleDeleteNote = (id: string) => {
-    if (!confirm('Delete this record?')) return;
-    const updated = history.filter((h) => h.id !== id);
-    setHistory(updated);
-    localStorage.setItem(`patient-history-${token.patient.mobile}`, JSON.stringify(updated));
+  const handleTopComplete = () => {
+    if (diagnosis.trim()) { handleComplete(); }
+    else if (medicines.length > 0) { setUnsavedDialog(true); }
+    else { handleCompleteNoSave(); }
   };
 
-  if (!token) return null;
+  /* ── CTA label & colour ── */
+  const ctaLabel = (() => {
+    if (isLabReturn && medicines.length > 0) return 'Complete & Send Rx to Pharmacy';
+    if (isLabReturn)                          return 'Save Final Diagnosis & Complete';
+    if (labPending)                           return `Save & Send to Lab (${labTests.length} test${labTests.length > 1 ? 's' : ''})`;
+    if (medicines.length > 0)                 return 'Save & Send to Pharmacy';
+    return 'Save & Complete';
+  })();
 
-  const isActive = token.status === 'in-consultation';
+  const ctaColor = (() => {
+    if (!diagnosis.trim())  return 'disabled';
+    if (labPending)         return 'teal';
+    return 'green';
+  })();
 
+  /* ── Footer hint ── */
+  const footerHint = (() => {
+    if (!diagnosis.trim())
+      return { icon: <AlertCircle size={12} />, text: 'Diagnosis is required to complete', color: 'error' };
+    if (isLabReturn && medicines.length > 0 && !token.pharmacySentAt)
+      return { icon: <Pill size={12} />, text: 'Prescription (based on lab results) will be sent to pharmacy', color: 'brand' };
+    if (isLabReturn)
+      return { icon: <CheckCircle2 size={12} />, text: 'Consultation will be marked complete', color: 'success' };
+    if (labPending)
+      return { icon: <FlaskConical size={12} />, text: 'Patient will go to lab — results return to your queue automatically', color: 'teal' };
+    if (medicines.length > 0 && !token.pharmacySentAt)
+      return { icon: <Pill size={12} />, text: 'Prescription will be sent to pharmacy', color: 'brand' };
+    return { icon: <CheckCircle2 size={12} />, text: 'Ready to complete consultation', color: 'neutral' };
+  })();
+
+  const hintColors: Record<string, string> = {
+    error:   'text-[var(--error-600)]',
+    brand:   'text-[var(--brand-700)]',
+    success: 'text-[var(--success-700)]',
+    teal:    'text-[var(--teal-700)]',
+    neutral: 'text-[var(--neutral-500)]',
+  };
+
+  /* ═══════════════════════════════════════════════ */
   return (
-    <div className="flex h-screen bg-[var(--neutral-50)] font-sans">
-      {/* Unsaved changes guard dialog */}
-      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+    <DoctorLayout
+      noPadding
+      breadcrumb={
+        <>
+          <span className="font-bold text-[var(--neutral-900)]">{token.patient.name}</span>
+          <span className="font-mono text-xs font-bold text-[var(--teal-700)] bg-[var(--teal-50)] border border-[var(--teal-200)] px-2 py-0.5 rounded-md">
+            {token.token}
+          </span>
+          {isLabReturn && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-white bg-[var(--teal-500)] px-2.5 py-1 rounded-full animate-pulse">
+              <FlaskConical size={10} /> Lab Return
+            </span>
+          )}
+        </>
+      }
+      contextPanel={
+        <div className="rounded-md border border-[var(--neutral-200)] bg-white p-3 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-[var(--neutral-100)] border border-[var(--neutral-200)] flex items-center justify-center flex-shrink-0">
+              <User size={14} className="text-[var(--neutral-500)]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-[var(--neutral-900)] truncate">{token.patient.name}</p>
+              <p className="text-[10px] text-[var(--neutral-400)]">{token.patient.age} yrs · {token.patient.gender}</p>
+            </div>
+          </div>
+          {token.patient.bloodGroup && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="flex items-center gap-0.5 text-[10px] font-bold text-[var(--error-600)] bg-[var(--error-50)] border border-[var(--error-200)] px-2 py-0.5 rounded-md">
+                <Droplet size={8} /> {token.patient.bloodGroup}
+              </span>
+            </div>
+          )}
+          {token.patient.selectedConditions?.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {token.patient.selectedConditions.map((c: string) => (
+                <span key={c} className="text-[9px] font-semibold px-1.5 py-0.5 bg-[var(--error-50)] border border-[var(--error-200)] text-[var(--error-600)] rounded-md">{c}</span>
+              ))}
+            </div>
+          )}
+          {history.length > 0 && (
+            <div className="border-t border-[var(--neutral-200)] pt-2">
+              <p className="text-[9px] font-bold text-[var(--neutral-400)] uppercase tracking-wider mb-1">Last visit</p>
+              <p className="text-[10px] text-[var(--neutral-600)] line-clamp-2 leading-relaxed">{history[0].diagnosis}</p>
+              <p className="text-[9px] text-[var(--neutral-400)] mt-0.5">
+                {new Date(history[0].date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+          )}
+        </div>
+      }
+    >
+
+      {/* ── Discard dialog ── */}
+      <AlertDialog open={unsavedDialog} onOpenChange={setUnsavedDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Medicines</AlertDialogTitle>
+            <AlertDialogTitle>No diagnosis entered</AlertDialogTitle>
             <AlertDialogDescription>
-              You have {medicines.length} medicine(s) added but no diagnosis saved. If you complete now, these medicines will be discarded and <strong>not sent to pharmacy</strong>. Do you want to add a diagnosis first?
+              You have {medicines.length} medicine(s) added but no diagnosis. Without a diagnosis
+              they <strong>won't be sent to pharmacy</strong>. Add a diagnosis first?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowUnsavedDialog(false)}>
-              Go Back &amp; Add Diagnosis
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => { setShowUnsavedDialog(false); doCompleteWithoutSaving(); }}
-              className="bg-[var(--error-500)] hover:bg-[var(--error-700)] text-white"
-            >
-              Discard &amp; Complete
+            <AlertDialogCancel>Add Diagnosis</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setUnsavedDialog(false); handleCompleteNoSave(); }}
+              className="bg-[var(--error-500)] hover:bg-[var(--error-700)] text-white">
+              Skip & Complete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* Sidebar — same as dashboard */}
-      <aside className="w-56 bg-white border-r border-[var(--neutral-200)] flex flex-col flex-shrink-0">
-        <div className="h-14 flex items-center px-5 border-b border-[var(--neutral-200)] flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[var(--brand-500)] rounded flex items-center justify-center flex-shrink-0">
-              <Stethoscope size={15} className="text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[var(--neutral-800)] leading-none">OPD System</p>
-              <p className="text-xs text-[var(--neutral-400)] mt-1">Doctor Portal</p>
-            </div>
-          </div>
-        </div>
 
-        <div className="flex-1 px-3 py-4 space-y-1">
-          <Button
-            variant="line"
-            onClick={() => navigate('/doctor-dashboard')}
-            className="w-full flex items-center justify-start gap-3 px-3 py-2 text-xs font-normal border-none hover:bg-[var(--neutral-100)]"
-          >
-            <ArrowLeft size={14} />
-            <span>Back to Queue</span>
-          </Button>
-          <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-[var(--brand-50)] text-[var(--brand-700)] font-medium text-sm">
-            <FileText size={16} className="text-[var(--brand-500)]" />
-            <span>Patient Details</span>
-          </div>
-        </div>
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-auto pb-24 animate-fade-in">
+          <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
 
-
-        <div className="px-3 py-3 border-t border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-          <div className="flex items-center gap-3 px-2 py-2">
-            <div className="w-8 h-8 rounded-full bg-[var(--neutral-200)] flex items-center justify-center flex-shrink-0">
-              <User size={14} className="text-[var(--neutral-600)]" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-[var(--neutral-700)] font-medium truncate">{currentDoctor?.name ?? 'Doctor'}</p>
-              <p className="text-[10px] text-[var(--neutral-400)] truncate">{currentDoctor?.specialty ?? ''}</p>
-            </div>
-            <button
-              onClick={() => { localStorage.removeItem('current-doctor'); localStorage.removeItem('opd-doctor-session-start'); navigate('/'); }}
-              className="text-[var(--neutral-400)] hover:text-[var(--neutral-600)] transition-colors"
-              title="Logout"
-            >
-              <LogOut size={15} />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="h-14 bg-white border-b border-[var(--neutral-200)] flex items-center justify-between px-6 flex-shrink-0">
-          <div className="flex items-center gap-2 text-sm text-[var(--neutral-500)]">
-            <span>Doctor</span>
-            <span className="text-[var(--neutral-300)]">/</span>
-            <span className="text-[var(--neutral-900)] font-medium">{token.patient.name}</span>
-            <span className="font-mono text-xs text-[var(--brand-700)] bg-[var(--brand-50)] px-2 py-0.5 rounded ml-1 font-semibold">· {token.token}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {isActive && (
-              <Button
-                onClick={handleComplete}
-                variant="primary"
-                className="bg-[var(--success-600)] hover:bg-[var(--success-700)] text-xs py-1.5 h-8"
-              >
-                <CheckCircle2 size={14} />
-                Complete Consultation
-              </Button>
-            )}
-            <div className="w-8 h-8 rounded-full bg-[var(--neutral-100)] border border-[var(--neutral-200)] flex items-center justify-center">
-              <User size={15} className="text-[var(--neutral-600)]" />
-            </div>
-          </div>
-        </header>
-
-        {/* Content */}
-        <main className="flex-1 overflow-auto p-6">
-          <div className="grid grid-cols-12 gap-5">
-            {/* Left: Patient info */}
-            <div className="col-span-3 space-y-4">
-              {/* Patient card */}
-              <div className="bg-white border border-[var(--neutral-200)] rounded-lg">
-                <div className="px-5 py-4 border-b border-[var(--neutral-100)]">
-                  <p className="text-sm font-medium text-[var(--neutral-900)]">Patient Info</p>
-                </div>
-                <div className="px-5 py-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full border border-[var(--neutral-200)] bg-[var(--neutral-100)] flex items-center justify-center flex-shrink-0">
-                      <User size={15} className="text-[var(--neutral-500)]" />
+            {/* ══════════════════════════════════════
+                LAB RETURN MODE — full banner + steps
+                ══════════════════════════════════════ */}
+            {isLabReturn && (
+              <>
+                {/* Lab results card */}
+                <div className="rounded-2xl border-2 border-[var(--teal-400)] overflow-hidden shadow-sm">
+                  <div className="flex items-center gap-3 px-5 py-4 bg-[var(--teal-500)]">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                      <FlaskConical size={18} className="text-white" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-[var(--neutral-900)]">{token.patient.name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {isActive && (
-                          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 border border-[var(--teal-200)] text-[var(--teal-700)] rounded">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--teal-500)]" />
-                            Active
-                          </span>
-                        )}
-                      </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-white">Lab Report Received</p>
+                      <p className="text-xs text-white/80">
+                        {token.labCompletedAt
+                          ? `Completed ${new Date(token.labCompletedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+                          : 'Results available — review below'}
+                      </p>
                     </div>
+                    <CheckCircle2 size={22} className="text-white/80 flex-shrink-0" />
                   </div>
 
-                  <div className="space-y-2.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[var(--neutral-400)]">Age / Gender</span>
-                      <span className="text-xs font-medium text-[var(--neutral-700)]">
-                        {token.patient.age} yrs · {token.patient.gender}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[var(--neutral-400)]">Mobile</span>
-                      <span className="text-xs font-medium text-[var(--neutral-700)]">{token.patient.mobile}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[var(--neutral-400)]">Blood Group</span>
-                      <span className="text-xs px-2 py-0.5 border border-[var(--neutral-200)] rounded text-[var(--neutral-700)] font-medium">
-                        {token.patient.bloodGroup || '—'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[var(--neutral-400)]">Token</span>
-                      <span className="font-mono text-xs font-semibold text-[var(--teal-600)] bg-[var(--teal-50)] px-2 py-0.5 rounded">
-                        {token.token}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Conditions */}
-              {token.patient.selectedConditions?.length > 0 && (
-                <div className="bg-white border border-[var(--error-200)] rounded-lg px-5 py-4">
-                  <div className="flex items-center gap-1.5 mb-3">
-                    <AlertCircle size={13} className="text-[var(--error-500)]" />
-                    <p className="text-xs font-medium text-[var(--error-700)] uppercase tracking-wide">Conditions</p>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {token.patient.selectedConditions.map((c: string) => (
-                      <span
-                        key={c}
-                        className="text-xs px-2 py-0.5 border border-[var(--error-200)] text-[var(--error-600)] rounded"
-                      >
-                        {c}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* History count */}
-              <div className="bg-white border border-[var(--neutral-200)] rounded-lg px-5 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs text-[var(--neutral-500)]">
-                  <FileText size={12} />
-                  Medical history
-                </div>
-                <span className="text-xs font-semibold text-[var(--neutral-700)]">{history.length} records</span>
-              </div>
-            </div>
-
-            {/* Right: Consultation + history */}
-            <div className="col-span-9 space-y-5">
-              {/* Consultation form */}
-              <div className="bg-white border border-[var(--neutral-200)] rounded-lg">
-                <div className="px-5 py-4 border-b border-[var(--neutral-100)]">
-                  <p className="text-sm font-medium text-[var(--neutral-900)]">New Consultation</p>
-                  <p className="text-xs text-[var(--neutral-500)] mt-0.5">Record diagnosis, notes and prescription</p>
-                </div>
-                <div className="px-5 py-5 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-[var(--neutral-600)] mb-1.5">
-                        Diagnosis <span className="text-[var(--error-500)]">*</span>
-                      </label>
-                      <textarea
-                        value={note.diagnosis}
-                        onChange={(e) => setNote({ ...note, diagnosis: e.target.value })}
-                        placeholder="Primary diagnosis..."
-                        rows={3}
-                        className="w-full px-3 py-2 text-sm border border-[var(--neutral-200)] rounded-md resize-none bg-white text-[var(--neutral-900)] focus:outline-none focus:border-[var(--teal-400)]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[var(--neutral-600)] mb-1.5">Notes</label>
-                      <textarea
-                        value={note.notes}
-                        onChange={(e) => setNote({ ...note, notes: e.target.value })}
-                        placeholder="Follow-up instructions, observations..."
-                        rows={3}
-                        className="w-full px-3 py-2 text-sm border border-[var(--neutral-200)] rounded-md resize-none bg-white text-[var(--neutral-900)] focus:outline-none focus:border-[var(--teal-400)]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Vitals Input */}
-                  <div className="border-t border-[var(--neutral-100)] pt-4">
-                    <p className="text-xs font-semibold text-[var(--neutral-700)] mb-3">Vitals & Testing Details</p>
-                    <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-white px-5 py-4 space-y-4">
+                    {/* Tests */}
+                    {(token.labTests || []).length > 0 && (
                       <div>
-                        <label className="block text-[10px] font-medium text-[var(--neutral-500)] mb-1">Blood Pressure (BP)</label>
-                        <Input
-                          value={vitals.bp}
-                          onChange={(e) => setVitals({ ...vitals, bp: e.target.value })}
-                          placeholder="e.g. 120/80"
-                          variant="primary"
-                          className="h-9 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-medium text-[var(--neutral-500)] mb-1">Temperature (°F)</label>
-                        <Input
-                          value={vitals.temp}
-                          onChange={(e) => setVitals({ ...vitals, temp: e.target.value })}
-                          placeholder="e.g. 98.6°F"
-                          variant="primary"
-                          className="h-9 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-medium text-[var(--neutral-500)] mb-1">Pulse Rate (bpm)</label>
-                        <Input
-                          value={vitals.pulse}
-                          onChange={(e) => setVitals({ ...vitals, pulse: e.target.value })}
-                          placeholder="e.g. 72"
-                          variant="primary"
-                          className="h-9 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-medium text-[var(--neutral-500)] mb-1">Weight (kg)</label>
-                        <Input
-                          value={vitals.weight}
-                          onChange={(e) => setVitals({ ...vitals, weight: e.target.value })}
-                          placeholder="e.g. 65kg"
-                          variant="primary"
-                          className="h-9 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Prescription */}
-                  <div className="border-t border-[var(--neutral-100)] pt-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <Pill size={13} className="text-[var(--neutral-400)]" />
-                        <span className="text-xs font-medium text-[var(--neutral-700)]">Prescription</span>
-                        {medicines.length > 0 && (
-                          <span className="text-xs text-[var(--neutral-400)]">({medicines.length})</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setShowTemplates(v => !v)}
-                          className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)] rounded-md transition-colors"
-                        >
-                          Templates {prescriptionTemplates.length > 0 && <span className="bg-[var(--brand-500)] text-white rounded-full px-1.5 text-[9px]">{prescriptionTemplates.length}</span>}
-                        </button>
-                        {medicines.length > 0 && (
-                          <button
-                            onClick={handleSendToPharmacy}
-                            disabled={!!token.pharmacySentAt}
-                            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 border rounded-md transition-colors ${
-                              token.pharmacySentAt
-                                ? 'border-[var(--success-200)] text-[var(--success-600)] bg-[var(--success-50)] cursor-default'
-                                : 'border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--teal-300)] hover:text-[var(--teal-600)]'
-                            }`}
-                          >
-                            <Send size={11} />
-                            {token.pharmacySentAt ? '✓ Sent to Pharmacy' : 'Send to Pharmacy'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Templates panel */}
-                    {showTemplates && (
-                      <div className="mb-3 p-3 bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-lg space-y-2">
-                        {prescriptionTemplates.length > 0 ? (
-                          <>
-                            <p className="text-[10px] font-semibold text-[var(--neutral-500)] uppercase tracking-wider">Saved Templates</p>
-                            {prescriptionTemplates.map(tpl => (
-                              <div key={tpl.id} className="flex items-center justify-between bg-white border border-[var(--neutral-200)] rounded-md px-3 py-2">
-                                <div>
-                                  <p className="text-xs font-semibold text-[var(--neutral-800)]">{tpl.name}</p>
-                                  <p className="text-[10px] text-[var(--neutral-400)]">{tpl.medicines.length} medicine(s)</p>
-                                </div>
-                                <div className="flex gap-1.5">
-                                  <button
-                                    onClick={() => { setMedicines(tpl.medicines); toast.success(`Template "${tpl.name}" loaded`); setShowTemplates(false); }}
-                                    className="text-[10px] font-semibold px-2 py-1 bg-[var(--brand-50)] border border-[var(--brand-200)] text-[var(--brand-700)] rounded hover:bg-[var(--brand-100)] transition-colors"
-                                  >
-                                    Load
-                                  </button>
-                                  <button
-                                    onClick={() => { deletePrescriptionTemplate(tpl.id); toast.info('Template deleted'); }}
-                                    className="text-[10px] font-semibold px-2 py-1 bg-white border border-[var(--neutral-200)] text-[var(--neutral-500)] rounded hover:bg-[var(--error-50)] hover:border-[var(--error-200)] hover:text-[var(--error-600)] transition-colors"
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </>
-                        ) : (
-                          <p className="text-xs text-[var(--neutral-400)] text-center py-2">No templates saved yet</p>
-                        )}
-                        {medicines.length > 0 && (
-                          <div className="flex gap-2 pt-1 border-t border-[var(--neutral-100)]">
-                            <input
-                              type="text"
-                              value={templateName}
-                              onChange={e => setTemplateName(e.target.value)}
-                              placeholder="Template name (e.g. Flu Protocol)"
-                              className="flex-1 px-2.5 py-1.5 text-xs border border-[var(--neutral-200)] rounded-md focus:outline-none focus:border-[var(--brand-400)]"
-                            />
-                            <button
-                              onClick={() => {
-                                if (!templateName.trim()) { toast.error('Enter a template name'); return; }
-                                savePrescriptionTemplate(templateName.trim(), medicines);
-                                setTemplateName('');
-                                toast.success(`Template "${templateName.trim()}" saved`);
-                              }}
-                              className="text-xs font-semibold px-3 py-1.5 bg-[var(--brand-500)] hover:bg-[var(--brand-700)] text-white rounded-md transition-colors"
-                            >
-                              Save current as template
-                            </button>
-                          </div>
-                        )}
+                        <p className="text-[10px] font-bold text-[var(--neutral-400)] uppercase tracking-wider mb-2">Tests Performed</p>
+                        <div className="flex flex-wrap gap-2">
+                          {(token.labTests || []).map((t: any) => (
+                            <span key={t.name} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-[var(--teal-50)] border border-[var(--teal-200)] text-[var(--teal-700)] rounded-full">
+                              <CheckCircle2 size={11} className="text-[var(--teal-500)]" /> {t.name}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    {/* Add medicine */}
-                    <div className="flex gap-2 mb-3">
-                      <SearchableDropdown
-                        value={newMed.name}
-                        onChange={(val) => setNewMed({ ...newMed, name: val })}
-                        options={MEDICINE_SUGGESTIONS}
-                        placeholder="Medicine *"
-                      />
-
-                      <SearchableDropdown
-                        value={newMed.dosage}
-                        onChange={(val) => setNewMed({ ...newMed, dosage: val })}
-                        options={DOSAGE_SUGGESTIONS}
-                        placeholder="Dosage *"
-                        className="w-36 flex-none"
-                      />
-
-                      <SearchableDropdown
-                        value={newMed.duration}
-                        onChange={(val) => setNewMed({ ...newMed, duration: val })}
-                        options={DURATION_SUGGESTIONS}
-                        placeholder="Duration"
-                        className="w-28 flex-none"
-                      />
-
-                      <Input
-                        value={newMed.instructions}
-                        onChange={(e) => setNewMed({ ...newMed, instructions: e.target.value })}
-                        placeholder="Instructions"
-                        variant="primary"
-                        className="flex-1 h-9 text-xs"
-                      />
-
-                      <Button
-                        onClick={handleAddMedicine}
-                        variant="line"
-                        className="h-9 px-3 flex-shrink-0 text-xs border-[var(--neutral-200)]"
-                      >
-                        <Plus size={14} />
-                        Add
-                      </Button>
-                    </div>
-
-                    {medicines.length > 0 && (
-                      <div className="border border-[var(--neutral-200)] rounded-md overflow-hidden">
-                        {medicines.map((m, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--neutral-100)] last:border-0 bg-white"
-                          >
-                            <span className="text-xs font-mono text-[var(--neutral-400)] w-4">{i + 1}</span>
-                            <div className="flex-1 min-w-0 text-sm">
-                              <span className="font-medium text-[var(--neutral-900)]">{m.name}</span>
-                              <span className="text-[var(--neutral-400)] ml-2">{m.dosage}</span>
-                              {m.duration && <span className="text-[var(--neutral-400)] ml-2">· {m.duration}</span>}
-                              {m.instructions && (
-                                <span className="text-[var(--neutral-400)] ml-2 italic">({m.instructions})</span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => setMedicines(medicines.filter((_, idx) => idx !== i))}
-                              className="text-[var(--neutral-300)] hover:text-[var(--error-500)] transition-colors"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Lab Requests */}
-                  <div className="border-t border-[var(--neutral-100)] pt-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <FlaskConical size={13} className="text-[var(--neutral-400)]" />
-                        <span className="text-xs font-medium text-[var(--neutral-700)]">Lab Request</span>
-                        {labTests.length > 0 && (
-                          <span className="text-xs text-[var(--neutral-400)]">({labTests.length})</span>
-                        )}
-                      </div>
-                      {labTests.length > 0 && (
-                        <button
-                          onClick={handleSendToLab}
-                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--teal-300)] hover:text-[var(--teal-600)] rounded-md transition-colors"
-                        >
-                          <Send size={11} />
-                          {labSent ? 'Update Lab Request' : 'Send to Lab'}
-                        </button>
+                    {/* Report notes */}
+                    <div>
+                      <p className="text-[10px] font-bold text-[var(--neutral-400)] uppercase tracking-wider mb-2">Report Notes from Lab</p>
+                      {token.labReportNotes ? (
+                        <div className="bg-[var(--teal-50)] border border-[var(--teal-200)] rounded-xl px-4 py-3">
+                          <p className="text-sm text-[var(--neutral-800)] whitespace-pre-line leading-relaxed">{token.labReportNotes}</p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-[var(--neutral-400)] italic px-1">No additional notes from lab technician.</p>
                       )}
                     </div>
-
-                    <div className="flex gap-2 mb-3">
-                      <SearchableDropdown
-                        value={newLabTest}
-                        onChange={setNewLabTest}
-                        options={LAB_TEST_SUGGESTIONS}
-                        placeholder="Select report / test type"
-                      />
-                      <Input
-                        value={labNotes}
-                        onChange={(e) => {
-                          setLabNotes(e.target.value);
-                          setLabSent(false);
-                        }}
-                        placeholder="Lab notes / clinical indication"
-                        variant="primary"
-                        className="flex-1 h-9 text-xs"
-                      />
-                      <Button
-                        onClick={handleAddLabTest}
-                        variant="line"
-                        className="h-9 px-3 flex-shrink-0 text-xs border-[var(--neutral-200)]"
-                      >
-                        <Plus size={14} />
-                        Add
-                      </Button>
-                    </div>
-
-                    {labTests.length > 0 && (
-                      <div className="border border-[var(--neutral-200)] rounded-md overflow-hidden">
-                        {labTests.map((test, i) => (
-                          <div
-                            key={test}
-                            className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--neutral-100)] last:border-0 bg-white"
-                          >
-                            <span className="text-xs font-mono text-[var(--neutral-400)] w-4">{i + 1}</span>
-                            <div className="flex-1 min-w-0 text-sm">
-                              <span className="font-medium text-[var(--neutral-900)]">{test}</span>
-                              {labNotes && <span className="text-[var(--neutral-400)] ml-2 italic">({labNotes})</span>}
-                            </div>
-                            <button
-                              onClick={() => {
-                                setLabTests(labTests.filter((_, idx) => idx !== i));
-                                setLabSent(false);
-                              }}
-                              className="text-[var(--neutral-300)] hover:text-[var(--error-500)] transition-colors"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="border-t border-[var(--neutral-100)] pt-4">
-                    <Button
-                      onClick={handleSaveAndComplete}
-                      disabled={!note.diagnosis}
-                      variant="primary"
-                      className="w-full text-xs font-semibold py-2.5 h-10"
-                    >
-                      <Save size={14} />
-                      {medicines.length === 0 && labTests.length === 0
-                        ? 'Save and Next Patient'
-                        : `Save and Send ${[
-                            medicines.length > 0 ? 'Pharmacy' : '',
-                            labTests.length > 0 ? 'Lab' : '',
-                          ].filter(Boolean).join(' & ')} & Next Patient`}
-                    </Button>
                   </div>
                 </div>
-              </div>
 
-              {/* Lab Results — shown when lab report has been completed */}
-              {token.labStatus === 'completed' && (
-                <div className="bg-white border border-[var(--teal-200)] rounded-lg p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FlaskConical size={14} className="text-[var(--teal-600)]" />
-                    <p className="text-sm font-semibold text-[var(--teal-800)]">Lab Results Available</p>
-                    {token.labCompletedAt && (
-                      <span className="text-[10px] text-[var(--neutral-500)]">
-                        Completed {new Date(token.labCompletedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    )}
-                  </div>
-                  {(token.labTests || []).length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-1.5">
-                      {(token.labTests || []).map(t => (
-                        <span key={t.name} className="text-xs px-2 py-1 bg-[var(--teal-50)] border border-[var(--teal-200)] text-[var(--teal-700)] rounded">
-                          ✓ {t.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {token.labReportNotes && (
-                    <div className="bg-[var(--teal-50)] border border-[var(--teal-100)] rounded-md px-4 py-3">
-                      <p className="text-[10px] font-semibold text-[var(--teal-700)] uppercase tracking-wide mb-1">Report Notes</p>
-                      <p className="text-sm text-[var(--neutral-800)] whitespace-pre-line">{token.labReportNotes}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* History Timeline */}
-              <div className="bg-white border border-[var(--neutral-200)] rounded-lg p-6">
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--neutral-100)]">
-                  <div className="flex items-center gap-2">
-                    <Clock size={16} className="text-[var(--neutral-500)]" />
-                    <h3 className="text-sm font-semibold text-[var(--neutral-900)]">Patient Medical History</h3>
-                  </div>
-                  <span className="text-xs font-medium px-2 py-0.5 border border-[var(--neutral-200)] text-[var(--neutral-600)] rounded-full">
-                    {history.length} {history.length === 1 ? 'Record' : 'Records'}
-                  </span>
-                </div>
-
-                {history.length === 0 ? (
-                  <div className="py-12 text-center text-[var(--neutral-400)] text-sm">
-                    No previous medical records found for this patient.
-                  </div>
-                ) : (
-                  <div className="relative pl-6 border-l border-[var(--neutral-200)] space-y-6 ml-2">
-                    {history.map((h) => (
-                      <div key={h.id} className="relative">
-                        {/* Timeline dot */}
-                        <span className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 border-[var(--brand-500)] bg-white flex items-center justify-center">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-500)]" />
-                        </span>
-
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <span className="text-xs font-semibold text-[var(--brand-700)] bg-[var(--brand-50)] px-2 py-0.5 rounded">
-                              {h.doctor}
-                            </span>
-                            {h.specialty && (
-                              <span className="text-xs text-[var(--neutral-500)] ml-2">
-                                ({h.specialty})
-                              </span>
-                            )}
-                            <p className="text-[11px] text-[var(--neutral-400)] mt-1.5 flex items-center gap-1">
-                              <Clock size={11} />
-                              {new Date(h.date).toLocaleDateString('en-IN', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteNote(h.id)}
-                            className="text-[var(--neutral-300)] hover:text-[var(--error-500)] transition-colors p-1 rounded hover:bg-[var(--neutral-100)]"
-                            title="Delete Record"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                {/* Step guide for lab return */}
+                <div className="bg-white border border-[var(--neutral-200)] rounded-2xl px-5 py-4">
+                  <p className="text-[10px] font-bold text-[var(--neutral-400)] uppercase tracking-wider mb-3">Complete These Steps</p>
+                  <div className="flex items-center gap-0">
+                    {[
+                      { n: '1', label: 'Review report', icon: <FlaskConical size={13} />, done: true },
+                      { n: '2', label: 'Write diagnosis', icon: <FileText size={13} />, done: !!diagnosis.trim() },
+                      { n: '3', label: 'Prescribe medicines', icon: <Pill size={13} />, done: medicines.length > 0 },
+                      { n: '4', label: 'Complete', icon: <CheckCircle2 size={13} />, done: false },
+                    ].map((step, i, arr) => (
+                      <div key={step.n} className="flex items-center flex-1 min-w-0">
+                        <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center ${
+                          step.done
+                            ? 'bg-[var(--teal-50)] border border-[var(--teal-200)]'
+                            : 'bg-[var(--neutral-50)] border border-[var(--neutral-200)]'
+                        }`}>
+                          <span className={step.done ? 'text-[var(--teal-600)]' : 'text-[var(--neutral-400)]'}>{step.icon}</span>
+                          <span className={`text-[10px] font-bold hidden sm:block ${step.done ? 'text-[var(--teal-700)]' : 'text-[var(--neutral-500)]'}`}>{step.label}</span>
                         </div>
-
-                        <div className="mt-3 space-y-3 pl-1">
-                          <div>
-                            <p className="text-[10px] font-semibold text-[var(--neutral-400)] uppercase tracking-wider">Diagnosis</p>
-                            <p className="text-sm text-[var(--neutral-800)] mt-0.5 leading-relaxed">{h.diagnosis}</p>
-                          </div>
-                          
-                          {h.prescription && (
-                            <div className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-md p-3">
-                              <p className="text-[10px] font-semibold text-[var(--neutral-500)] uppercase tracking-wider mb-1">Prescribed Medicines</p>
-                              <p className="text-xs text-[var(--neutral-700)] whitespace-pre-line leading-relaxed">{h.prescription}</p>
-                            </div>
-                          )}
-
-                          {h.notes && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-[var(--neutral-400)] uppercase tracking-wider">Doctor's Notes</p>
-                              <p className="text-xs text-[var(--neutral-600)] mt-0.5 leading-relaxed">{h.notes}</p>
-                            </div>
-                          )}
-
-                          {h.labTests && (
-                            <div className="bg-[var(--teal-50)] border border-[var(--teal-200)] rounded-md p-3">
-                              <p className="text-[10px] font-semibold text-[var(--teal-700)] uppercase tracking-wider mb-1">Lab Tests Requested</p>
-                              <p className="text-xs text-[var(--neutral-700)] whitespace-pre-line leading-relaxed">{h.labTests}</p>
-                            </div>
-                          )}
-
-                          {h.vitals && (
-                            <div className="flex flex-wrap gap-4 pt-2">
-                              {[
-                                { label: 'BP', value: h.vitals.bp },
-                                { label: 'Temp', value: h.vitals.temp },
-                                { label: 'Pulse', value: h.vitals.pulse },
-                                { label: 'Weight', value: h.vitals.weight },
-                              ].map((v) => (
-                                <div key={v.label} className="border border-[var(--neutral-200)] px-2 py-1 rounded bg-white min-w-[70px]">
-                                  <p className="text-[10px] text-[var(--neutral-400)] font-medium leading-none">{v.label}</p>
-                                  <p className="text-xs font-semibold text-[var(--neutral-700)] mt-1">{v.value}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Divider between timeline nodes if not last */}
-                        <div className="h-4" />
+                        {i < arr.length - 1 && (
+                          <ArrowRight size={13} className="text-[var(--neutral-300)] flex-shrink-0 mx-1" />
+                        )}
                       </div>
                     ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ══════════════════════════════════════
+                SECTION 1: VITALS
+                ══════════════════════════════════════ */}
+            <Section
+              number={isLabReturn ? null : 1}
+              title="Vitals"
+              subtitle="Record current measurements"
+              icon={<Activity size={14} />}
+              collapsed={isLabReturn}
+            >
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {([
+                  { key: 'bp',     label: 'Blood Pressure', unit: 'mmHg', ph: '120/80',  icon: <Heart     size={12} className="text-[var(--error-400)]"   /> },
+                  { key: 'temp',   label: 'Temperature',    unit: '°F',   ph: '98.6',    icon: <Thermometer size={12} className="text-[var(--warning-500)]" /> },
+                  { key: 'pulse',  label: 'Pulse Rate',     unit: 'bpm',  ph: '72',      icon: <Activity  size={12} className="text-[var(--brand-400)]"   /> },
+                  { key: 'weight', label: 'Weight',         unit: 'kg',   ph: '65',      icon: <Weight    size={12} className="text-[var(--neutral-400)]" /> },
+                ] as const).map(({ key, label, unit, ph, icon }) => (
+                  <div key={key}>
+                    <label className="flex items-center gap-1 text-[10px] font-bold text-[var(--neutral-500)] uppercase tracking-wider mb-1.5">
+                      {icon} {label}
+                    </label>
+                    <div className="relative">
+                      <input type="text" value={vitals[key]}
+                        onChange={e => setVitals({ ...vitals, [key]: e.target.value })}
+                        placeholder={ph} disabled={!isActive}
+                        className="w-full h-9 px-3 pr-12 text-sm border border-[var(--neutral-200)] rounded-lg bg-white focus:outline-none focus:border-[var(--brand-400)] disabled:bg-[var(--neutral-50)] disabled:text-[var(--neutral-400)]"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--neutral-400)] font-medium pointer-events-none">{unit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+
+            {/* ══════════════════════════════════════
+                SECTION 2: DIAGNOSIS  (required)
+                ══════════════════════════════════════ */}
+            <Section
+              number={isLabReturn ? 1 : 2}
+              title={isLabReturn ? 'Final Diagnosis' : 'Diagnosis & Notes'}
+              subtitle={isLabReturn ? 'Based on examination + lab report' : 'Document clinical findings'}
+              icon={<FileText size={14} />}
+              required
+              highlight={isLabReturn}
+            >
+              <div className={`grid gap-3 ${isLabReturn ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                <div>
+                  <label className="block text-xs font-bold text-[var(--neutral-600)] mb-1.5">
+                    Diagnosis <span className="text-[var(--error-500)]">*</span>
+                  </label>
+                  <textarea
+                    value={diagnosis}
+                    onChange={e => setDiagnosis(e.target.value)}
+                    placeholder={isLabReturn ? 'Final diagnosis based on lab findings (e.g. Typhoid fever confirmed by Widal test)…' : 'Primary diagnosis…'}
+                    rows={isLabReturn ? 3 : 4}
+                    disabled={!isActive}
+                    className="w-full px-3 py-2.5 text-sm border border-[var(--neutral-200)] rounded-xl resize-none bg-white focus:outline-none focus:border-[var(--brand-400)] placeholder-[var(--neutral-400)] disabled:bg-[var(--neutral-50)]"
+                  />
+                </div>
+                {!isLabReturn && (
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--neutral-600)] mb-1.5">Clinical Notes</label>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Follow-up instructions, observations, advice…"
+                      rows={4}
+                      disabled={!isActive}
+                      className="w-full px-3 py-2.5 text-sm border border-[var(--neutral-200)] rounded-xl resize-none bg-white focus:outline-none focus:border-[var(--brand-400)] placeholder-[var(--neutral-400)] disabled:bg-[var(--neutral-50)]"
+                    />
+                  </div>
+                )}
+                {isLabReturn && (
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--neutral-600)] mb-1.5">Follow-up Notes (optional)</label>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Follow-up in X days, dietary advice, lifestyle changes…"
+                      rows={2}
+                      disabled={!isActive}
+                      className="w-full px-3 py-2.5 text-sm border border-[var(--neutral-200)] rounded-xl resize-none bg-white focus:outline-none focus:border-[var(--brand-400)] placeholder-[var(--neutral-400)] disabled:bg-[var(--neutral-50)]"
+                    />
                   </div>
                 )}
               </div>
+            </Section>
+
+            {/* ══════════════════════════════════════
+                SECTION 3: PRESCRIPTION
+                On lab return this is the KEY action — highlighted
+                ══════════════════════════════════════ */}
+            <Section
+              number={isLabReturn ? 2 : 3}
+              title={isLabReturn ? 'Prescription  —  Based on Lab Report' : 'Prescription'}
+              subtitle={isLabReturn ? 'Prescribe medicines as per lab findings' : 'Add medicines to prescribe'}
+              icon={<Pill size={14} />}
+              badge={medicines.length > 0 ? `${medicines.length} added` : undefined}
+              highlight={isLabReturn}
+            >
+              {/* Lab return callout */}
+              {isLabReturn && (
+                <div className="flex items-start gap-2 px-3 py-2.5 bg-[var(--teal-50)] border border-[var(--teal-200)] rounded-xl mb-4">
+                  <ClipboardList size={13} className="text-[var(--teal-600)] flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-[var(--teal-700)]">
+                    Add medicines based on the lab report above. These will go directly to pharmacy
+                    when you click <strong>Complete & Send Rx to Pharmacy</strong>.
+                  </p>
+                </div>
+              )}
+
+              {isActive && (
+                <>
+                  {/* Templates */}
+                  <button onClick={() => setShowTemplates(v => !v)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-[var(--neutral-500)] hover:text-[var(--brand-600)] mb-3">
+                    {showTemplates ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    Prescription Templates
+                    {prescriptionTemplates.length > 0 && (
+                      <span className="text-[9px] font-bold bg-[var(--brand-500)] text-white px-1.5 py-0.5 rounded-full">{prescriptionTemplates.length}</span>
+                    )}
+                  </button>
+
+                  {showTemplates && (
+                    <div className="mb-4 p-3 bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-xl space-y-2">
+                      {prescriptionTemplates.length === 0 ? (
+                        <p className="text-xs text-[var(--neutral-400)] text-center py-2">No templates saved yet</p>
+                      ) : prescriptionTemplates.map(tpl => (
+                        <div key={tpl.id} className="flex items-center justify-between bg-white border border-[var(--neutral-200)] rounded-lg px-3 py-2">
+                          <div>
+                            <p className="text-xs font-bold text-[var(--neutral-800)]">{tpl.name}</p>
+                            <p className="text-[10px] text-[var(--neutral-400)]">{tpl.medicines.length} medicine(s)</p>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button onClick={() => { setMedicines(tpl.medicines); toast.success(`"${tpl.name}" loaded`); setShowTemplates(false); }}
+                              className="text-[10px] font-bold px-2 py-1 bg-[var(--brand-50)] border border-[var(--brand-200)] text-[var(--brand-700)] rounded-lg">Load</button>
+                            <button onClick={() => { deletePrescriptionTemplate(tpl.id); toast.info('Deleted'); }}
+                              className="text-[10px] font-bold px-2 py-1 bg-white border border-[var(--neutral-200)] text-[var(--neutral-500)] rounded-lg hover:border-[var(--error-200)] hover:text-[var(--error-600)]">×</button>
+                          </div>
+                        </div>
+                      ))}
+                      {medicines.length > 0 && (
+                        <div className="flex gap-2 pt-2 border-t border-[var(--neutral-100)]">
+                          <input value={tplName} onChange={e => setTplName(e.target.value)}
+                            placeholder="Save as template (e.g. Flu Protocol)"
+                            className="flex-1 px-2.5 py-1.5 text-xs border border-[var(--neutral-200)] rounded-lg focus:outline-none focus:border-[var(--brand-400)]" />
+                          <button onClick={() => {
+                            if (!tplName.trim()) { toast.error('Enter name'); return; }
+                            savePrescriptionTemplate(tplName.trim(), medicines);
+                            setTplName(''); toast.success(`"${tplName.trim()}" saved`);
+                          }} className="text-xs font-bold px-3 py-1.5 bg-[var(--brand-500)] text-white rounded-lg hover:bg-[var(--brand-700)]">Save</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Add medicine row */}
+                  <div className="flex gap-2 mb-3 flex-wrap sm:flex-nowrap">
+                    <Dropdown value={newMed.name} onChange={v => setNewMed({ ...newMed, name: v })} options={MED_NAMES} placeholder="Medicine name *" className="flex-1 min-w-0" />
+                    <Dropdown value={newMed.dosage} onChange={v => setNewMed({ ...newMed, dosage: v })} options={DOSAGES} placeholder="Dosage *" className="w-40 flex-shrink-0" />
+                    <Dropdown value={newMed.duration} onChange={v => setNewMed({ ...newMed, duration: v })} options={DURATIONS} placeholder="Duration" className="w-28 flex-shrink-0" />
+                    <Input value={newMed.instructions} onChange={e => setNewMed({ ...newMed, instructions: e.target.value })} placeholder="Instructions" variant="primary" className="flex-1 h-9 text-xs min-w-0" />
+                    <button onClick={() => {
+                      if (!newMed.name || !newMed.dosage) { toast.error('Name & dosage required'); return; }
+                      setMedicines([...medicines, newMed]);
+                      setNewMed({ name: '', dosage: '', duration: '', instructions: '' });
+                    }} className="h-9 px-3 flex-shrink-0 flex items-center gap-1 text-xs font-semibold border border-[var(--neutral-200)] rounded-lg hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]">
+                      <Plus size={13} /> Add
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Medicine list */}
+              {medicines.length > 0 ? (
+                <div className="border border-[var(--neutral-200)] rounded-xl overflow-hidden">
+                  {medicines.map((m, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--neutral-100)] last:border-0 bg-white hover:bg-[var(--neutral-50)] transition-colors">
+                      <span className="text-xs text-[var(--neutral-400)] w-5 font-mono flex-shrink-0">{i + 1}.</span>
+                      <div className="flex-1 min-w-0 text-sm">
+                        <span className="font-semibold text-[var(--neutral-900)]">{m.name}</span>
+                        <span className="text-[var(--neutral-500)] ml-2 text-xs">{m.dosage}</span>
+                        {m.duration && <span className="text-[var(--neutral-400)] ml-1.5 text-xs">· {m.duration}</span>}
+                        {m.instructions && <span className="text-[var(--neutral-400)] ml-1.5 text-xs italic">({m.instructions})</span>}
+                      </div>
+                      {isActive && (
+                        <button onClick={() => setMedicines(medicines.filter((_, idx) => idx !== i))}
+                          className="text-[var(--neutral-300)] hover:text-[var(--error-500)] flex-shrink-0">
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--neutral-400)] py-3 text-center">
+                  {isActive
+                    ? isLabReturn ? 'Add medicines based on the lab report above' : 'No medicines added yet — use the form above'
+                    : 'No medicines prescribed'}
+                </p>
+              )}
+            </Section>
+
+            {/* ══════════════════════════════════════
+                SECTION 4: LAB TESTS
+                Only on initial consultation
+                ══════════════════════════════════════ */}
+            {!isLabReturn && (
+              <Section
+                number={4}
+                title="Lab Tests"
+                subtitle="Order investigations if required"
+                icon={<FlaskConical size={14} />}
+                badge={labSent ? 'Sent to lab' : labTests.length > 0 ? `${labTests.length} ordered` : undefined}
+              >
+                {isActive && !labSent && (
+                  <div className="flex gap-2 mb-3 flex-wrap sm:flex-nowrap">
+                    <Dropdown value={newTest} onChange={setNewTest} options={LAB_TESTS} placeholder="Select test *" className="flex-1 min-w-0" />
+                    <Input value={newTestNotes} onChange={e => setNewTestNotes(e.target.value)}
+                      placeholder="Clinical indication (optional)" variant="primary" className="flex-1 h-9 text-xs min-w-0" />
+                    <button onClick={() => {
+                      const name = newTest.trim();
+                      if (!name) { toast.error('Select a test'); return; }
+                      if (labTests.find(t => t.name === name)) { toast.error('Already added'); return; }
+                      setLabTests([...labTests, { name, notes: newTestNotes.trim() }]);
+                      setNewTest(''); setNewTestNotes('');
+                    }} className="h-9 px-3 flex-shrink-0 flex items-center gap-1 text-xs font-semibold border border-[var(--neutral-200)] rounded-lg hover:border-[var(--teal-300)] hover:text-[var(--teal-600)]">
+                      <Plus size={13} /> Add
+                    </button>
+                  </div>
+                )}
+                {labTests.length > 0 ? (
+                  <div className="border border-[var(--neutral-200)] rounded-xl overflow-hidden">
+                    {labTests.map((t, i) => (
+                      <div key={t.name} className="flex items-start gap-3 px-4 py-3 border-b border-[var(--neutral-100)] last:border-0 bg-white">
+                        <FlaskConical size={12} className="text-[var(--teal-500)] mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[var(--neutral-900)]">{t.name}</p>
+                          {t.notes && <p className="text-xs text-[var(--neutral-500)] mt-0.5 italic">{t.notes}</p>}
+                        </div>
+                        {isActive && !labSent && (
+                          <button onClick={() => setLabTests(labTests.filter((_, idx) => idx !== i))}
+                            className="text-[var(--neutral-300)] hover:text-[var(--error-500)] flex-shrink-0 mt-0.5">
+                            <X size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--neutral-400)] py-3 text-center">No tests added — optional</p>
+                )}
+                {labTests.length > 0 && isActive && (
+                  <div className="mt-3 flex items-start gap-2 px-3 py-2.5 bg-[var(--teal-50)] border border-[var(--teal-200)] rounded-xl">
+                    <FlaskConical size={13} className="text-[var(--teal-600)] flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-[var(--teal-700)]">
+                      When you click <strong>Save & Send to Lab</strong>, the patient goes to the lab.
+                      Once results are ready they'll <strong>return to your queue automatically</strong>.
+                    </p>
+                  </div>
+                )}
+              </Section>
+            )}
+
+            {/* ══════════════════════════════════════
+                SECTION 5: PAST HISTORY
+                ══════════════════════════════════════ */}
+            <div className="bg-white border border-[var(--neutral-200)] rounded-2xl overflow-hidden">
+              <button onClick={() => setShowHistory(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-[var(--neutral-50)] transition-colors">
+                <div className="flex items-center gap-2.5">
+                  <Clock size={14} className="text-[var(--neutral-500)]" />
+                  <p className="text-sm font-bold text-[var(--neutral-900)]">Past Medical History</p>
+                  <span className="text-xs text-[var(--neutral-400)] font-medium">{history.length} records</span>
+                </div>
+                {showHistory ? <ChevronUp size={15} className="text-[var(--neutral-400)]" /> : <ChevronDown size={15} className="text-[var(--neutral-400)]" />}
+              </button>
+
+              {showHistory && (
+                <div className="border-t border-[var(--neutral-100)] px-5 py-5">
+                  {history.length === 0 ? (
+                    <p className="text-sm text-[var(--neutral-400)] text-center py-8">No previous records</p>
+                  ) : (
+                    <div className="relative pl-6 border-l-2 border-[var(--neutral-100)] space-y-5 ml-2">
+                      {history.map(h => (
+                        <div key={h.id} className="relative">
+                          <span className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 border-[var(--brand-300)] bg-white flex items-center justify-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-300)]" />
+                          </span>
+                          <div className="flex items-start justify-between mb-1.5">
+                            <div>
+                              <span className="text-xs font-bold text-[var(--brand-700)] bg-[var(--brand-50)] border border-[var(--brand-100)] px-2 py-0.5 rounded-md">{h.doctor}</span>
+                              <p className="text-[10px] text-[var(--neutral-400)] mt-1">
+                                {new Date(h.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                            <button onClick={() => {
+                              if (!confirm('Delete record?')) return;
+                              const u = history.filter(x => x.id !== h.id);
+                              setHistory(u);
+                              localStorage.setItem(`patient-history-${token.patient.mobile}`, JSON.stringify(u));
+                            }} className="text-[var(--neutral-300)] hover:text-[var(--error-400)] p-0.5">
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                          <p className="text-[10px] font-bold text-[var(--neutral-400)] uppercase tracking-wider">Diagnosis</p>
+                          <p className="text-sm text-[var(--neutral-800)] mt-0.5 mb-2">{h.diagnosis}</p>
+                          {h.prescription && (
+                            <div className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-lg p-2.5 mb-2">
+                              <p className="text-[10px] font-bold text-[var(--neutral-400)] uppercase tracking-wider mb-1">Rx</p>
+                              <p className="text-xs text-[var(--neutral-700)] whitespace-pre-line">{h.prescription}</p>
+                            </div>
+                          )}
+                          {h.labTests && (
+                            <div className="bg-[var(--teal-50)] border border-[var(--teal-200)] rounded-lg p-2.5 mb-2">
+                              <p className="text-[10px] font-bold text-[var(--teal-600)] uppercase tracking-wider mb-1">Lab Tests</p>
+                              <p className="text-xs text-[var(--neutral-700)] whitespace-pre-line">{h.labTests}</p>
+                            </div>
+                          )}
+                          {h.vitals && (
+                            <div className="flex flex-wrap gap-2">
+                              {[['BP', h.vitals.bp, 'mmHg'], ['Temp', h.vitals.temp, '°F'], ['Pulse', h.vitals.pulse, 'bpm'], ['Wt', h.vitals.weight, 'kg']].map(([l, v, u]) => v ? (
+                                <div key={l} className="border border-[var(--neutral-200)] px-2.5 py-1.5 rounded-lg bg-white">
+                                  <p className="text-[9px] font-bold text-[var(--neutral-400)] uppercase">{l}</p>
+                                  <p className="text-xs font-bold text-[var(--neutral-700)] mt-0.5">{v} <span className="text-[var(--neutral-400)] font-normal text-[10px]">{u}</span></p>
+                                </div>
+                              ) : null)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        </main>
+        </div>
+
+        {/* ══ Sticky footer CTA ══ */}
+        {isActive && (
+          <div className="sticky bottom-0 bg-white border-t border-[var(--neutral-200)] px-6 py-4 flex items-center gap-4">
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-semibold flex items-center gap-1.5 ${hintColors[footerHint.color]}`}>
+                {footerHint.icon} {footerHint.text}
+              </p>
+            </div>
+
+            <button
+              onClick={handleTopComplete}
+              disabled={ctaColor === 'disabled'}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors flex-shrink-0 ${
+                ctaColor === 'disabled' ? 'bg-[var(--neutral-200)] text-[var(--neutral-400)] cursor-not-allowed'
+                : ctaColor === 'teal'   ? 'bg-[var(--teal-600)] hover:bg-[var(--teal-700)] text-white'
+                :                        'bg-[var(--success-600)] hover:bg-[var(--success-700)] text-white'
+              }`}
+            >
+              {ctaColor === 'teal' ? <FlaskConical size={15} /> : <Save size={15} />}
+              {ctaLabel}
+            </button>
+          </div>
+        )}
+    </DoctorLayout>
+  );
+}
+
+/* ─── Section wrapper ─── */
+function Section({ number, title, subtitle, icon, required, badge, action, children, highlight = false, collapsed = false }: {
+  number: number | null; title: string; subtitle: string; icon: React.ReactNode;
+  required?: boolean; badge?: string; action?: React.ReactNode;
+  children: React.ReactNode; highlight?: boolean; collapsed?: boolean;
+}) {
+  const [open, setOpen] = useState(!collapsed);
+
+  return (
+    <div className={`bg-white rounded-2xl ${
+      highlight ? 'border-2 border-[var(--teal-300)] shadow-sm' : 'border border-[var(--neutral-200)]'
+    }`}>
+      <div
+        className={`flex items-center justify-between px-5 py-3.5 border-b cursor-pointer select-none rounded-t-2xl ${
+          highlight ? 'border-[var(--teal-200)] bg-[var(--teal-50)]' : 'border-[var(--neutral-100)] bg-[var(--neutral-50)]'
+        }`}
+        onClick={() => collapsed && setOpen(v => !v)}
+      >
+        <div className="flex items-center gap-3">
+          {number !== null && (
+            <span className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
+              highlight ? 'bg-[var(--teal-200)] text-[var(--teal-800)]' : 'bg-[var(--brand-100)] text-[var(--brand-700)]'
+            }`}>{number}</span>
+          )}
+          <div className="flex items-center gap-1.5">
+            <span className={highlight ? 'text-[var(--teal-600)]' : 'text-[var(--neutral-500)]'}>{icon}</span>
+            <p className={`text-sm font-bold ${highlight ? 'text-[var(--teal-800)]' : 'text-[var(--neutral-900)]'}`}>{title}</p>
+            {required && <span className="text-[var(--error-500)] text-xs font-bold">*</span>}
+          </div>
+          {badge && (
+            <span className="text-[10px] font-bold px-2 py-0.5 bg-[var(--success-50)] border border-[var(--success-200)] text-[var(--success-700)] rounded-full">
+              {badge}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-[var(--neutral-400)] hidden sm:block">{subtitle}</p>
+          {action}
+          {collapsed && (
+            open ? <ChevronUp size={14} className="text-[var(--neutral-400)] ml-1" /> : <ChevronDown size={14} className="text-[var(--neutral-400)] ml-1" />
+          )}
+        </div>
       </div>
+      {open && <div className="px-5 py-4">{children}</div>}
     </div>
   );
 }

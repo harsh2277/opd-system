@@ -1,123 +1,120 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp, Token, Medicine } from '../context/AppContext';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
-  Clock,
-  CheckCircle,
-  Plus,
-  Trash2,
-  DollarSign,
-  AlertCircle,
-  Package,
-  User,
-  ShoppingBag,
-  Search,
+  Clock, CheckCircle2, Plus, Trash2, AlertCircle, Package,
+  User, ShoppingBag, Search, Pill, Bell, ArrowRight, X,
 } from 'lucide-react';
+
+/* ── Time helpers ── */
+function waitingTime(sentAt?: string): string {
+  if (!sentAt) return '—';
+  const mins = Math.floor((Date.now() - new Date(sentAt).getTime()) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+}
+
+function waitingColor(sentAt?: string): string {
+  if (!sentAt) return 'text-[var(--neutral-400)]';
+  const mins = Math.floor((Date.now() - new Date(sentAt).getTime()) / 60000);
+  if (mins > 20) return 'text-[var(--error-600)] font-bold';
+  if (mins > 10) return 'text-[var(--warning-600)] font-semibold';
+  return 'text-[var(--success-600)]';
+}
 
 export function PharmacyDashboard() {
   const { tokens, dispensePrescription, addNotification } = useApp();
+
   const [selectedTokenNumber, setSelectedTokenNumber] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'dispensed'>('pending');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [doctorFilter, setDoctorFilter] = useState<string>('All');
-
-  // Edit states for currently selected prescription
+  const [activeTab, setActiveTab]         = useState<'pending' | 'dispensed'>('pending');
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [doctorFilter, setDoctorFilter]   = useState('All');
   const [tempMedicines, setTempMedicines] = useState<Medicine[]>([]);
-  const [newMed, setNewMed] = useState<Medicine>({ name: '', dosage: '', duration: '', instructions: '' });
-  const [customBillAmount, setCustomBillAmount] = useState<number>(0);
+  const [newMed, setNewMed]               = useState<Medicine>({ name: '', dosage: '', duration: '', instructions: '' });
+  const [customBillAmount, setCustomBillAmount] = useState(0);
   const [showDispenseConfirm, setShowDispenseConfirm] = useState(false);
-  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
+  const [pendingDeleteIndex, setPendingDeleteIndex]   = useState<number | null>(null);
 
-  const allPending = tokens.filter(
-    (t) => t.prescription && t.prescription.length > 0 && t.prescriptionStatus === 'pending'
-  );
-  const allDispensed = tokens.filter(
-    (t) => t.prescription && t.prescriptionStatus === 'dispensed'
-  );
+  // Track which tokens are "new" (arrived since last visit) for the alert badge
+  const [newTokenIds, setNewTokenIds]   = useState<Set<string>>(new Set());
+  const [alertDismissed, setAlertDismissed] = useState(false);
+  const prevPendingRef = useRef<string[]>([]);
+  const [tick, setTick] = useState(0);
 
-  // Unique doctors across pending prescriptions for filter chips
+  // Refresh waiting times every 30s
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Detect newly arrived prescriptions
+  useEffect(() => {
+    const allPendingIds = tokens
+      .filter(t => t.prescription?.length && t.prescriptionStatus === 'pending')
+      .map(t => t.token);
+
+    const prev = prevPendingRef.current;
+    const brandNew = allPendingIds.filter(id => !prev.includes(id));
+    if (brandNew.length > 0) {
+      setNewTokenIds(prev => new Set([...prev, ...brandNew]));
+      setAlertDismissed(false);
+    }
+    prevPendingRef.current = allPendingIds;
+  }, [tokens]);
+
+  /* ── Derived lists ── */
+  const allPending   = tokens.filter(t => t.prescription?.length && t.prescriptionStatus === 'pending');
+  const allDispensed = tokens.filter(t => t.prescription?.length && t.prescriptionStatus === 'dispensed');
   const pendingDoctors = ['All', ...Array.from(new Set(allPending.map(t => t.doctor.name)))];
 
-  const applyFilters = (list: Token[]) => {
-    return list
+  const applyFilters = (list: Token[]) =>
+    list
       .filter(t => doctorFilter === 'All' || t.doctor.name === doctorFilter)
       .filter(t => {
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();
         return t.patient.name.toLowerCase().includes(q) || t.token.toLowerCase().includes(q) || t.patient.mobile.includes(q);
       })
-      // Urgent patients first, then oldest first
       .sort((a, b) => {
         if (a.urgent && !b.urgent) return -1;
         if (!a.urgent && b.urgent) return 1;
-        return new Date(a.issuedAt).getTime() - new Date(b.issuedAt).getTime();
+        return new Date(a.pharmacySentAt || a.issuedAt).getTime() - new Date(b.pharmacySentAt || b.issuedAt).getTime();
       });
-  };
 
-  const pendingTokens = applyFilters(allPending);
+  const pendingTokens   = applyFilters(allPending);
   const dispensedTokens = applyFilters(allDispensed);
+  const selectedToken   = tokens.find(t => t.token === selectedTokenNumber);
+  const newCount        = newTokenIds.size;
 
-  const selectedToken = tokens.find((t) => t.token === selectedTokenNumber);
-
+  /* ── Handlers ── */
   const handleSelectToken = (token: Token) => {
     setSelectedTokenNumber(token.token);
     setTempMedicines(token.prescription || []);
-    const estimatedCost = (token.prescription || []).length * 150 + 20; // 150 per med + 20 admin charge
-    setCustomBillAmount(token.billingAmount || estimatedCost);
-  };
-
-  const handleAddMedicine = () => {
-    if (!newMed.name || !newMed.dosage) {
-      toast.error('Medicine name and dosage are required');
-      return;
-    }
-    const updated = [...tempMedicines, newMed];
-    setTempMedicines(updated);
-    setCustomBillAmount(updated.length * 150 + 20);
-    setNewMed({ name: '', dosage: '', duration: '', instructions: '' });
-  };
-
-  const handleRemoveMedicine = (index: number) => {
-    setPendingDeleteIndex(index);
-  };
-
-  const confirmRemoveMedicine = () => {
-    if (pendingDeleteIndex === null) return;
-    const updated = tempMedicines.filter((_, i) => i !== pendingDeleteIndex);
-    setTempMedicines(updated);
-    setCustomBillAmount(updated.length * 150 + 20);
-    setPendingDeleteIndex(null);
-    toast.info('Medicine removed from prescription');
+    setCustomBillAmount(token.billingAmount || (token.prescription || []).length * 150 + 20);
+    // Mark as seen
+    setNewTokenIds(prev => { const n = new Set(prev); n.delete(token.token); return n; });
   };
 
   const handleDispense = () => {
     if (!selectedToken) return;
-    if (tempMedicines.length === 0) {
-      toast.error('Prescription must have at least one medicine');
-      return;
-    }
+    if (tempMedicines.length === 0) { toast.error('Prescription must have at least one medicine'); return; }
     setShowDispenseConfirm(true);
   };
 
-  const confirmDispense = () => {
+  const confirmDispense = async () => {
     if (!selectedToken) return;
-    dispensePrescription(selectedToken.token, tempMedicines, customBillAmount);
-    addNotification(
-      `Prescription delivered & Billing collected for ${selectedToken.patient.name} (${selectedToken.token}) - Total Paid: ₹${customBillAmount}`,
+    await dispensePrescription(selectedToken.token, tempMedicines, customBillAmount);
+    await addNotification(
+      `Prescription dispensed for ${selectedToken.patient.name} (${selectedToken.token}) — ₹${customBillAmount} collected`,
       'success'
     );
-    toast.success(`Medicines dispensed and ₹${customBillAmount} collected successfully!`);
+    toast.success(`Medicines dispensed — ₹${customBillAmount} collected`);
     printReceipt(selectedToken, tempMedicines, customBillAmount);
     setSelectedTokenNumber(null);
     setShowDispenseConfirm(false);
@@ -149,15 +146,17 @@ export function PharmacyDashboard() {
     if (w) { w.document.write(html); w.document.close(); }
   };
 
+  /* ══════════════════════════════════════════════════════ */
   return (
-    <div className="space-y-6">
-      {/* Dispense confirmation */}
+    <div className="space-y-4">
+
+      {/* ── Dialogs ── */}
       <AlertDialog open={showDispenseConfirm} onOpenChange={setShowDispenseConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Dispensing</AlertDialogTitle>
             <AlertDialogDescription>
-              Dispense {tempMedicines.length} medicine(s) to <strong>{selectedToken?.patient.name}</strong> and collect <strong>₹{customBillAmount}</strong>? A receipt will print automatically.
+              Dispense <strong>{tempMedicines.length} medicine(s)</strong> to <strong>{selectedToken?.patient.name}</strong> and collect <strong>₹{customBillAmount}</strong>? A receipt will print automatically.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -167,7 +166,6 @@ export function PharmacyDashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Medicine removal confirmation */}
       <AlertDialog open={pendingDeleteIndex !== null} onOpenChange={() => setPendingDeleteIndex(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -178,78 +176,108 @@ export function PharmacyDashboard() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmRemoveMedicine} className="bg-[var(--error-500)] hover:bg-[var(--error-700)] text-white">Remove</AlertDialogAction>
+            <AlertDialogAction onClick={() => {
+              if (pendingDeleteIndex === null) return;
+              const updated = tempMedicines.filter((_, i) => i !== pendingDeleteIndex);
+              setTempMedicines(updated);
+              setCustomBillAmount(updated.length * 150 + 20);
+              setPendingDeleteIndex(null);
+              toast.info('Medicine removed');
+            }} className="bg-[var(--error-500)] hover:bg-[var(--error-700)] text-white">Remove</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-neutral-900">Pharmacy Portal</h1>
-        <p className="text-xs text-neutral-500 mt-0.5">Dispense doctor prescriptions and manage patient pharmacy billing</p>
+      {/* ── Header row ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-[var(--neutral-900)]">Pharmacy Portal</h1>
+          <p className="text-xs text-[var(--neutral-500)] mt-0.5">Dispense prescriptions and collect payment</p>
+        </div>
+        {/* Stats pills */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--warning-50)] border border-[var(--warning-200)]">
+            <Clock size={13} className="text-[var(--warning-500)]" />
+            <span className="text-xs font-bold text-[var(--warning-700)]">{allPending.length} Pending</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--success-50)] border border-[var(--success-200)]">
+            <CheckCircle2 size={13} className="text-[var(--success-500)]" />
+            <span className="text-xs font-bold text-[var(--success-700)]">{allDispensed.length} Dispensed</span>
+          </div>
+        </div>
       </div>
 
-      {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
-        {/* Left column: Prescription Lists (2/3 width on large screens) */}
-        <div className="lg:col-span-2 space-y-4 bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          {/* Tabs header */}
-          <div className="flex border-b border-neutral-200 bg-neutral-50">
-            <button
-              onClick={() => {
-                setActiveTab('pending');
-                setSelectedTokenNumber(null);
-              }}
-              className={`flex-1 py-3 text-[11px] sm:text-xs font-semibold uppercase tracking-normal sm:tracking-wider text-center border-b-2 transition-all flex items-center justify-center gap-2 ${
-                activeTab === 'pending'
-                  ? 'border-brand-500 text-brand-700 bg-white'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/50'
-              }`}
-            >
-              <Clock size={14} />
-              Pending Prescriptions ({pendingTokens.length})
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('dispensed');
-                setSelectedTokenNumber(null);
-              }}
-              className={`flex-1 py-3 text-[11px] sm:text-xs font-semibold uppercase tracking-normal sm:tracking-wider text-center border-b-2 transition-all flex items-center justify-center gap-2 ${
-                activeTab === 'dispensed'
-                  ? 'border-brand-500 text-brand-700 bg-white'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/50'
-              }`}
-            >
-              <CheckCircle size={14} />
-              Dispensed History ({dispensedTokens.length})
-            </button>
+      {/* ── New prescription alert banner ── */}
+      {newCount > 0 && !alertDismissed && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-[var(--brand-500)] rounded-2xl">
+          <div className="relative flex-shrink-0">
+            <Bell size={16} className="text-white" />
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[var(--error-500)] rounded-full flex items-center justify-center text-[9px] font-bold text-white">{newCount}</span>
+          </div>
+          <p className="text-sm font-bold text-white flex-1">
+            {newCount} new prescription{newCount > 1 ? 's' : ''} received from doctor
+            {newCount === 1 && allPending.find(t => newTokenIds.has(t.token)) && (
+              <span className="ml-1 text-white/80 font-normal text-xs">
+                — {allPending.find(t => newTokenIds.has(t.token))?.patient.name} ({allPending.find(t => newTokenIds.has(t.token))?.token})
+              </span>
+            )}
+          </p>
+          <button
+            onClick={() => {
+              setActiveTab('pending');
+              setAlertDismissed(true);
+            }}
+            className="flex items-center gap-1 text-xs font-bold text-white/90 hover:text-white bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+          >
+            View <ArrowRight size={12} />
+          </button>
+          <button onClick={() => setAlertDismissed(true)} className="text-white/60 hover:text-white flex-shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* ── Main grid ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+
+        {/* ── Left: list ── */}
+        <div className="lg:col-span-2 bg-white border border-[var(--neutral-200)] rounded-2xl overflow-hidden">
+
+          {/* Tabs */}
+          <div className="flex border-b border-[var(--neutral-200)] bg-[var(--neutral-50)]">
+            {(['pending', 'dispensed'] as const).map(tab => (
+              <button key={tab} onClick={() => { setActiveTab(tab); setSelectedTokenNumber(null); }}
+                className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-center border-b-2 transition-all flex items-center justify-center gap-2 ${
+                  activeTab === tab
+                    ? 'border-[var(--brand-500)] text-[var(--brand-700)] bg-white'
+                    : 'border-transparent text-[var(--neutral-500)] hover:text-[var(--neutral-900)] hover:bg-[var(--neutral-100)]'
+                }`}>
+                {tab === 'pending' ? <Clock size={13} /> : <CheckCircle2 size={13} />}
+                {tab === 'pending' ? `Pending (${pendingTokens.length})` : `Dispensed (${dispensedTokens.length})`}
+                {tab === 'pending' && newCount > 0 && (
+                  <span className="text-[9px] font-bold bg-[var(--error-500)] text-white px-1.5 py-0.5 rounded-full animate-pulse">{newCount} new</span>
+                )}
+              </button>
+            ))}
           </div>
 
-          {/* Search + Doctor Filter */}
-          <div className="px-4 pt-3 pb-2 space-y-2 border-b border-neutral-100">
+          {/* Search + doctor filter */}
+          <div className="px-4 pt-3 pb-2 border-b border-[var(--neutral-100)] space-y-2">
             <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search patient, token, mobile..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-neutral-200 rounded-md bg-white focus:outline-none focus:border-brand-400"
-              />
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--neutral-400)]" />
+              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search patient, token, mobile…"
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-[var(--neutral-200)] rounded-lg bg-white focus:outline-none focus:border-[var(--brand-400)]" />
             </div>
             {pendingDoctors.length > 2 && (
               <div className="flex flex-wrap gap-1.5">
                 {pendingDoctors.map(doc => (
-                  <button
-                    key={doc}
-                    onClick={() => setDoctorFilter(doc)}
+                  <button key={doc} onClick={() => setDoctorFilter(doc)}
                     className={`text-[10px] px-2.5 py-1 rounded-full border font-medium transition-colors ${
                       doctorFilter === doc
-                        ? 'bg-brand-500 border-brand-500 text-white'
-                        : 'bg-white border-neutral-200 text-neutral-600 hover:border-brand-300 hover:text-brand-700'
-                    }`}
-                  >
+                        ? 'bg-[var(--brand-500)] border-[var(--brand-500)] text-white'
+                        : 'bg-white border-[var(--neutral-200)] text-[var(--neutral-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-700)]'
+                    }`}>
                     {doc === 'All' ? 'All Doctors' : `Dr. ${doc}`}
                   </button>
                 ))}
@@ -257,216 +285,240 @@ export function PharmacyDashboard() {
             )}
           </div>
 
-          {/* List Content */}
-          <div className="p-4 min-h-[450px] max-h-[600px] overflow-y-auto">
+          {/* Cards */}
+          <div className="p-4 min-h-[400px] max-h-[580px] overflow-y-auto">
             {activeTab === 'pending' ? (
               pendingTokens.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {pendingTokens.map((t) => (
-                    <div
-                      key={t.token}
-                      onClick={() => handleSelectToken(t)}
-                      className={`p-4 border rounded-xl cursor-pointer transition-all ${
-                        selectedTokenNumber === t.token
-                          ? 'border-brand-500 bg-brand-50/30 ring-1 ring-brand-500'
-                          : 'border-neutral-200 bg-white hover:border-brand-300 hover:bg-neutral-50/30'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-mono font-bold text-xs bg-brand-50 border border-brand-200 text-brand-700 px-2 py-0.5 rounded">
-                          {t.token}
-                        </span>
-                        <div className="flex items-center gap-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {pendingTokens.map(t => {
+                    const isNew = newTokenIds.has(t.token);
+                    const isSelected = selectedTokenNumber === t.token;
+                    return (
+                      <div key={t.token} onClick={() => handleSelectToken(t)}
+                        className={`p-4 border-2 rounded-xl cursor-pointer transition-all relative ${
+                          isSelected
+                            ? 'border-[var(--brand-500)] bg-[var(--brand-50)] ring-2 ring-[var(--brand-200)]'
+                            : isNew
+                              ? 'border-[var(--brand-300)] bg-[var(--brand-50)] hover:border-[var(--brand-500)]'
+                              : 'border-[var(--neutral-200)] bg-white hover:border-[var(--brand-300)] hover:bg-[var(--neutral-50)]'
+                        }`}>
+
+                        {/* New badge */}
+                        {isNew && (
+                          <span className="absolute top-2.5 right-2.5 text-[9px] font-bold bg-[var(--brand-500)] text-white px-2 py-0.5 rounded-full animate-pulse">
+                            NEW
+                          </span>
+                        )}
+
+                        <div className="flex items-start justify-between mb-2 pr-10">
+                          <span className="font-mono text-xs font-bold text-[var(--teal-700)] bg-[var(--teal-50)] border border-[var(--teal-200)] px-2 py-0.5 rounded-lg">
+                            {t.token}
+                          </span>
                           {t.urgent && (
-                            <span className="text-[10px] font-bold bg-error-500 text-white px-2 py-0.5 rounded animate-pulse">
-                              URGENT
+                            <span className="flex items-center gap-0.5 text-[9px] font-bold bg-[var(--error-500)] text-white px-1.5 py-0.5 rounded-full">
+                              <AlertCircle size={8} /> URGENT
                             </span>
                           )}
-                          <span className="text-[10px] font-semibold bg-warning-50 border border-warning-200 text-warning-700 px-2 py-0.5 rounded">
-                            Pending
+                        </div>
+
+                        <p className="font-bold text-sm text-[var(--neutral-900)]">{t.patient.name}</p>
+                        <p className="text-[10px] text-[var(--neutral-500)] mt-0.5">
+                          {t.patient.age} yrs · {t.patient.gender}
+                        </p>
+
+                        {/* Doctor + medicine count row */}
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-[10px] font-semibold bg-[var(--neutral-100)] text-[var(--neutral-600)] px-2 py-0.5 rounded-md">
+                            Dr. {t.doctor.name}
+                          </span>
+                          <span className="text-[10px] text-[var(--neutral-500)]">·</span>
+                          <span className="text-[10px] text-[var(--neutral-600)]">
+                            <Pill size={9} className="inline mr-0.5" />{t.prescription?.length} medicine{(t.prescription?.length || 0) > 1 ? 's' : ''}
+                          </span>
+                        </div>
+
+                        {/* Waiting time */}
+                        <div className="mt-2.5 pt-2.5 border-t border-[var(--neutral-100)] flex items-center justify-between">
+                          <span className={`text-[10px] flex items-center gap-1 ${waitingColor(t.pharmacySentAt)}`}>
+                            <Clock size={9} /> {waitingTime(t.pharmacySentAt)}
+                          </span>
+                          <span className="text-[10px] font-bold text-[var(--brand-700)]">
+                            ₹{(t.prescription?.length || 0) * 150 + 20} est.
                           </span>
                         </div>
                       </div>
-                      <h3 className="font-semibold text-sm text-neutral-800">{t.patient.name}</h3>
-                      <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1.5">
-                        <span className="bg-neutral-100 px-1.5 py-0.5 rounded text-[10px] font-medium text-neutral-600">
-                          Dr. {t.doctor.name}
-                        </span>
-                        <span>·</span>
-                        <span>{t.prescription?.length} Medicines</span>
-                      </p>
-                      <div className="mt-3 pt-3 border-t border-neutral-100 flex justify-between items-center text-[10px] text-neutral-400">
-                        <span>Issued: {new Date(t.issuedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                        <span className="font-semibold text-brand-700">₹{(t.prescription?.length || 0) * 150 + 20} est.</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-24 text-center text-neutral-400">
-                  <Package size={36} className="text-neutral-300 mb-2" />
-                  <p className="text-sm">No pending prescriptions to dispense</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">They will appear here when a doctor saves a prescription</p>
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Package size={36} className="text-[var(--neutral-300)] mb-3" />
+                  <p className="text-sm font-semibold text-[var(--neutral-700)]">No pending prescriptions</p>
+                  <p className="text-xs text-[var(--neutral-400)] mt-1">Prescriptions appear here when a doctor sends them</p>
                 </div>
               )
             ) : dispensedTokens.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {dispensedTokens.map((t) => (
-                  <div key={t.token} className="p-4 border border-neutral-200 bg-neutral-50/50 rounded-xl">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="font-mono font-bold text-xs bg-neutral-100 border border-neutral-200 text-neutral-600 px-2 py-0.5 rounded">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {dispensedTokens.map(t => (
+                  <div key={t.token} className="p-4 border border-[var(--neutral-200)] bg-[var(--neutral-50)] rounded-xl">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="font-mono text-xs font-bold text-[var(--neutral-500)] bg-[var(--neutral-100)] border border-[var(--neutral-200)] px-2 py-0.5 rounded-lg">
                         {t.token}
                       </span>
-                      <span className="text-[10px] font-semibold bg-success-50 border border-success-200 text-success-700 px-2 py-0.5 rounded flex items-center gap-1">
-                        <CheckCircle size={10} /> Dispensed
+                      <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--success-700)] bg-[var(--success-50)] border border-[var(--success-200)] px-2 py-0.5 rounded-full">
+                        <CheckCircle2 size={9} /> Dispensed
                       </span>
                     </div>
-                    <h3 className="font-semibold text-sm text-neutral-800">{t.patient.name}</h3>
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Dispensed by Pharmacy · Dr. {t.doctor.name}
-                    </p>
-                    <div className="mt-3 pt-3 border-t border-neutral-200 flex justify-between items-center text-[10px]">
-                      <span className="text-neutral-400">Paid Amount:</span>
-                      <span className="font-bold text-success-700">₹{t.billingAmount}</span>
+                    <p className="font-bold text-sm text-[var(--neutral-900)]">{t.patient.name}</p>
+                    <p className="text-[10px] text-[var(--neutral-500)] mt-0.5">Dr. {t.doctor.name}</p>
+                    <div className="mt-2.5 pt-2.5 border-t border-[var(--neutral-200)] flex items-center justify-between">
+                      <span className="text-[10px] text-[var(--neutral-400)]">
+                        {t.prescription?.length} medicine(s)
+                      </span>
+                      <span className="text-xs font-bold text-[var(--success-700)]">₹{t.billingAmount}</span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-24 text-center text-neutral-400">
-                <CheckCircle size={36} className="text-neutral-300 mb-2" />
-                <p className="text-sm">No dispensed history found</p>
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <CheckCircle2 size={36} className="text-[var(--neutral-300)] mb-3" />
+                <p className="text-sm font-semibold text-[var(--neutral-700)]">No dispensed history yet</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right column: Prescription Details & Dispense Workspace */}
-        <div className="space-y-4">
+        {/* ── Right: detail panel ── */}
+        <div>
           {selectedToken ? (
-            <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-5 shadow-sm">
-              <div className="border-b border-neutral-100 pb-3">
-                <span className="text-[10px] font-bold text-brand-600 uppercase tracking-widest block mb-1">Prescription Detail</span>
-                <h2 className="text-base font-bold text-neutral-900 flex items-center justify-between">
-                  <span>{selectedToken.patient.name}</span>
-                  <span className="font-mono text-xs bg-brand-50 border border-brand-200 text-brand-700 px-2.5 py-0.5 rounded">
+            <div className="bg-white border border-[var(--neutral-200)] rounded-2xl overflow-hidden shadow-sm">
+
+              {/* Patient header */}
+              <div className="px-5 py-4 border-b border-[var(--neutral-100)] bg-[var(--neutral-50)]">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold text-[var(--brand-600)] uppercase tracking-widest">Prescription Detail</span>
+                  <span className="font-mono text-xs font-bold text-[var(--teal-700)] bg-[var(--teal-50)] border border-[var(--teal-200)] px-2.5 py-0.5 rounded-lg">
                     {selectedToken.token}
                   </span>
-                </h2>
-                <p className="text-xs text-neutral-500 mt-1">
-                  Prescribed by <span className="font-semibold text-neutral-800">Dr. {selectedToken.doctor.name}</span>
+                </div>
+                <p className="text-base font-bold text-[var(--neutral-900)]">{selectedToken.patient.name}</p>
+                <p className="text-xs text-[var(--neutral-500)] mt-0.5">
+                  {selectedToken.patient.age} yrs · {selectedToken.patient.gender}
                 </p>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-semibold bg-[var(--brand-50)] border border-[var(--brand-200)] text-[var(--brand-700)] px-2 py-0.5 rounded-md">
+                    Dr. {selectedToken.doctor.name}
+                  </span>
+                  <span className="text-[10px] font-semibold text-[var(--neutral-500)]">
+                    {selectedToken.doctor.specialty}
+                  </span>
+                </div>
+                {selectedToken.pharmacySentAt && (
+                  <p className={`text-[10px] mt-2 flex items-center gap-1 ${waitingColor(selectedToken.pharmacySentAt)}`}>
+                    <Clock size={9} /> Received {waitingTime(selectedToken.pharmacySentAt)}
+                  </p>
+                )}
               </div>
 
-              {/* Medicine List Editor */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Medicines</h3>
-                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                  {tempMedicines.map((med, index) => (
-                    <div key={index} className="flex justify-between items-center p-2.5 bg-neutral-50 border border-neutral-100 rounded-lg group">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-neutral-800 truncate">{med.name}</p>
-                        <p className="text-[10px] text-neutral-500 mt-0.5 flex gap-1.5 flex-wrap">
-                          <span>Dose: {med.dosage}</span>
-                          {med.duration && <span>· Duration: {med.duration}</span>}
-                          {med.instructions && <span className="text-brand-600">({med.instructions})</span>}
-                        </p>
+              <div className="px-5 py-4 space-y-4">
+
+                {/* Medicines editor */}
+                <div>
+                  <p className="text-[10px] font-bold text-[var(--neutral-400)] uppercase tracking-wider mb-2">
+                    Medicines <span className="text-[var(--neutral-300)]">({tempMedicines.length})</span>
+                  </p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {tempMedicines.map((med, idx) => (
+                      <div key={idx} className="flex items-start gap-2 p-2.5 bg-[var(--neutral-50)] border border-[var(--neutral-100)] rounded-xl group">
+                        <Pill size={11} className="text-[var(--brand-400)] flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--neutral-800)]">{med.name}</p>
+                          <p className="text-[10px] text-[var(--neutral-500)] mt-0.5">
+                            {med.dosage}{med.duration ? ` · ${med.duration}` : ''}{med.instructions ? ` · ${med.instructions}` : ''}
+                          </p>
+                        </div>
+                        <button onClick={() => setPendingDeleteIndex(idx)}
+                          className="text-[var(--neutral-300)] hover:text-[var(--error-500)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <Trash2 size={11} />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleRemoveMedicine(index)}
-                        className="text-neutral-400 hover:text-error-500 p-1 rounded hover:bg-neutral-100 cursor-pointer"
-                        title="Remove Medicine"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                    ))}
+                  </div>
+
+                  {/* Add extra medicine */}
+                  <div className="mt-3 pt-3 border-t border-[var(--neutral-100)] space-y-2">
+                    <p className="text-[10px] font-semibold text-[var(--neutral-400)]">Add Extra / Alternative</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { field: 'name',         ph: 'Medicine name' },
+                        { field: 'dosage',       ph: 'Dosage (1-0-1)' },
+                        { field: 'duration',     ph: 'Duration' },
+                        { field: 'instructions', ph: 'Instructions' },
+                      ].map(({ field, ph }) => (
+                        <input key={field} type="text" placeholder={ph}
+                          value={(newMed as any)[field]}
+                          onChange={e => setNewMed({ ...newMed, [field]: e.target.value })}
+                          className="text-xs px-2.5 py-1.5 border border-[var(--neutral-200)] rounded-lg bg-white focus:outline-none focus:border-[var(--brand-400)]" />
+                      ))}
                     </div>
-                  ))}
+                    <Button onClick={() => {
+                      if (!newMed.name || !newMed.dosage) { toast.error('Name & dosage required'); return; }
+                      const updated = [...tempMedicines, newMed];
+                      setTempMedicines(updated);
+                      setCustomBillAmount(updated.length * 150 + 20);
+                      setNewMed({ name: '', dosage: '', duration: '', instructions: '' });
+                    }} variant="secondary" className="w-full h-8 text-xs border border-[var(--brand-200)]">
+                      <Plus size={11} /> Add Medicine
+                    </Button>
+                  </div>
                 </div>
 
-                {/* Add new medicine row */}
-                <div className="pt-2 border-t border-neutral-100 space-y-2">
-                  <p className="text-[10px] font-semibold text-neutral-400">Add Extra/Alternative Medicine</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Med Name"
-                      value={newMed.name}
-                      onChange={(e) => setNewMed({ ...newMed, name: e.target.value })}
-                      className="text-xs px-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md focus:border-brand-500 focus:bg-white outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Dosage (e.g. 1-0-1)"
-                      value={newMed.dosage}
-                      onChange={(e) => setNewMed({ ...newMed, dosage: e.target.value })}
-                      className="text-xs px-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md focus:border-brand-500 focus:bg-white outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Duration"
-                      value={newMed.duration}
-                      onChange={(e) => setNewMed({ ...newMed, duration: e.target.value })}
-                      className="text-xs px-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md focus:border-brand-500 focus:bg-white outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Instructions"
-                      value={newMed.instructions}
-                      onChange={(e) => setNewMed({ ...newMed, instructions: e.target.value })}
-                      className="text-xs px-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-md focus:border-brand-500 focus:bg-white outline-none"
-                    />
+                {/* Billing */}
+                <div className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-xl p-3.5 space-y-2">
+                  <p className="text-[10px] font-bold text-[var(--neutral-400)] uppercase tracking-wider">Billing</p>
+                  <div className="space-y-1 text-xs text-[var(--neutral-600)]">
+                    <div className="flex justify-between">
+                      <span>Medicines ({tempMedicines.length} × ₹150)</span>
+                      <span>₹{tempMedicines.length * 150}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Dispensing charge</span>
+                      <span>₹20</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-[var(--neutral-200)] font-bold text-[var(--neutral-900)]">
+                      <span className="text-sm">Total</span>
+                      <input type="number" value={customBillAmount}
+                        onChange={e => setCustomBillAmount(Number(e.target.value))}
+                        className="w-20 text-right text-sm bg-white border border-[var(--neutral-200)] rounded-lg px-2 py-0.5 focus:outline-none focus:border-[var(--brand-400)]" />
+                    </div>
                   </div>
-                  <Button
-                    onClick={handleAddMedicine}
-                    variant="secondary"
-                    className="w-full text-xs py-1 h-8 flex items-center justify-center gap-1 border border-brand-200"
-                  >
-                    <Plus size={12} /> Add Medicine
-                  </Button>
                 </div>
+
+                {/* Dispense CTA */}
+                <button onClick={handleDispense}
+                  className="w-full py-3 px-4 bg-[var(--success-600)] hover:bg-[var(--success-700)] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                  <ShoppingBag size={15} />
+                  Dispense & Collect ₹{customBillAmount}
+                </button>
               </div>
-
-              {/* Billing Details */}
-              <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 space-y-3">
-                <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-1">
-                  <DollarSign size={13} /> Billing Summary
-                </h3>
-                <div className="space-y-1.5 text-xs text-neutral-600">
-                  <div className="flex justify-between">
-                    <span>Medicines ({tempMedicines.length})</span>
-                    <span>₹{tempMedicines.length * 150}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Dispensing & Admin Charge</span>
-                    <span>₹20</span>
-                  </div>
-                  <div className="border-t border-neutral-200 pt-2 mt-2 flex justify-between font-bold text-neutral-900 text-sm">
-                    <span>Total Bill</span>
-                    <input
-                      type="number"
-                      value={customBillAmount}
-                      onChange={(e) => setCustomBillAmount(Number(e.target.value))}
-                      className="w-20 text-right bg-white border border-neutral-200 rounded px-1 text-xs outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleDispense}
-                className="w-full py-2.5 px-4 bg-success-500 hover:bg-success-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98] cursor-pointer"
-              >
-                <ShoppingBag size={14} />
-                Dispense & Collect Payment (₹{customBillAmount})
-              </button>
             </div>
           ) : (
-            <div className="bg-neutral-50 border border-neutral-200 border-dashed rounded-xl p-8 text-center text-neutral-400 h-[380px] flex flex-col items-center justify-center">
-              <ShoppingBag size={32} className="text-neutral-300 mb-2 animate-bounce" />
-              <h3 className="text-sm font-semibold text-neutral-700">Select Prescription</h3>
-              <p className="text-xs text-neutral-400 mt-1 max-w-[200px] mx-auto">
-                Pick a pending patient from the list on the left to start dispensing and collect payment.
-              </p>
+            <div className="bg-[var(--neutral-50)] border-2 border-dashed border-[var(--neutral-200)] rounded-2xl p-8 text-center h-[420px] flex flex-col items-center justify-center gap-3">
+              <div className="w-14 h-14 rounded-2xl bg-white border border-[var(--neutral-200)] flex items-center justify-center">
+                <ShoppingBag size={22} className="text-[var(--neutral-300)]" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--neutral-700)]">Select a prescription</p>
+                <p className="text-xs text-[var(--neutral-400)] mt-1 max-w-[180px] mx-auto">
+                  Pick a patient from the list to review and dispense medicines
+                </p>
+              </div>
+              {allPending.length > 0 && (
+                <p className="text-[10px] font-bold text-[var(--warning-600)] bg-[var(--warning-50)] border border-[var(--warning-200)] px-3 py-1.5 rounded-full">
+                  {allPending.length} prescription{allPending.length > 1 ? 's' : ''} waiting
+                </p>
+              )}
             </div>
           )}
         </div>

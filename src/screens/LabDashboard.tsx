@@ -56,19 +56,18 @@ export function LabDashboard() {
     }
   };
 
-  const handleCompleteReport = () => {
+  const handleCompleteReport = async () => {
     if (!selectedToken) return;
     if (!reportNotes.trim()) {
-      toast.error('Add report notes before finalising');
-      return;
+      toast.info('No report notes added — submitting anyway');
     }
 
-    completeLabRequest(selectedToken.token, reportNotes.trim());
-    addNotification(
-      `Lab report completed for ${selectedToken.patient.name} (${selectedToken.token})`,
+    await completeLabRequest(selectedToken.token, reportNotes.trim());
+    await addNotification(
+      `Lab results ready — ${selectedToken.patient.name} (${selectedToken.token}) returned to Dr. ${selectedToken.doctor.name}'s queue`,
       'success'
     );
-    toast.success('Lab report finalised and sent to doctor');
+    toast.success('Lab report sent to doctor — patient returned to queue');
     setSelectedTokenNumber(null);
     setReportNotes('');
   };
